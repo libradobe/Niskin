@@ -187,8 +187,22 @@ const PASTEL_CLASSES = ['pastel-rose', 'pastel-sage', 'pastel-lavender', 'pastel
 // ============================================================================
 // NAVEGACIÓN PRINCIPAL
 // ============================================================================
+function toggleMobileMenu(forceOpen) {
+  const isOpen = typeof forceOpen === 'boolean'
+    ? forceOpen
+    : !document.body.classList.contains('menu-open');
+  document.body.classList.toggle('menu-open', isOpen);
+  document.getElementById('menuToggleBtn')?.setAttribute('aria-expanded', String(isOpen));
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') toggleMobileMenu(false);
+});
+
 function switchView(viewName) {
+  const viewChanged = uiState.currentView !== viewName;
   uiState.currentView = viewName;
+  toggleMobileMenu(false);
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === viewName);
   });
@@ -212,6 +226,7 @@ function switchView(viewName) {
   document.getElementById('topbarSubheading').textContent = subtitle;
 
   renderWorkspace();
+  if (viewChanged) window.scrollTo({ top: 0 });
 }
 
 function renderWorkspace() {
@@ -1042,7 +1057,7 @@ function renderTreatmentsView() {
       </button>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:20px;">
       ${state.treatments.map(t => `
         <div class="surface-card" style="padding:22px;display:flex;flex-direction:column;justify-content:space-between;gap:14px;">
           <div>
@@ -1205,7 +1220,7 @@ function renderClientPortalView() {
           <strong>Vista Interactiva del Cliente:</strong> A la izquierda tienes el teléfono móvil con el flujo de reserva fiel a tu boceto, y a la derecha el panel personal donde <strong>${client.name}</strong> revisa sus fotos de mejoría, historial y rutina.
         </span>
       </div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-soft ${uiState.portalTab === 'booking' ? 'active' : ''}"
                 style="${uiState.portalTab === 'booking' ? 'background:var(--gold-primary);color:#fff;' : ''}"
                 onclick="setPortalTab('booking')">
@@ -1397,7 +1412,7 @@ function renderClientPortalView() {
             <h3 style="font-family:var(--font-serif);font-size:1.3rem;margin-bottom:10px;">
               Mis Citas Reservadas (${clientAppointments.length})
             </h3>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px;">
               ${clientAppointments.map(app => `
                 <div style="background:#FAF8F4;border:1px solid var(--border-card);border-radius:12px;padding:14px;">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">

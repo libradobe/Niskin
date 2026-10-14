@@ -1,4 +1,7 @@
 :root {
+  /* Tema claro fijo: evita que el modo oscuro del sistema/navegador cambie los colores */
+  color-scheme: only light;
+
   /* Warm Cream & Gold Palette extracted from Niskin Wireframes & Logo */
   --bg-canvas: #F5F2EB;
   --bg-sidebar: #FAF8F4;
@@ -63,8 +66,16 @@
   padding: 0;
 }
 
+html {
+  color-scheme: only light;
+  background-color: #F5F2EB;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
   line-height: 1.5;
@@ -255,6 +266,25 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
+}
+
+.menu-toggle-btn {
+  display: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--border-card);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebar-overlay {
+  display: none;
 }
 
 .topbar-title h1 {
@@ -1347,6 +1377,11 @@ body {
   outline: none;
 }
 
+select.form-control,
+.phone-user-select {
+  color-scheme: only light;
+}
+
 .form-control:focus {
   border-color: var(--gold-primary);
   background: #FFFFFF;
@@ -1388,6 +1423,9 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ==========================================================================
+   RESPONSIVE — TABLET
+   ========================================================================== */
 @media (max-width: 1120px) {
   .dashboard-grid,
   .patients-layout,
@@ -1396,23 +1434,326 @@ body {
     grid-template-columns: 1fr;
   }
   .kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .topbar {
+    padding: 14px 22px;
+    flex-wrap: wrap;
+  }
+  .content-area {
+    padding: 22px 22px 40px;
   }
 }
 
+/* ==========================================================================
+   RESPONSIVE — MÓVIL (menú lateral deslizable + filas en tarjeta)
+   ========================================================================== */
 @media (max-width: 820px) {
   .app-layout {
     grid-template-columns: 1fr;
   }
+
+  /* Sidebar convertida en cajón lateral */
   .sidebar {
-    height: auto;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(290px, 84vw);
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: calc(18px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom));
+    transform: translateX(-100%);
+    transition: transform 0.28s ease, box-shadow 0.28s ease;
+    z-index: 90;
+    gap: 16px;
   }
-  .card-subhead {
+  .menu-open .sidebar {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(45, 35, 22, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+    z-index: 80;
+  }
+  .menu-open .sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  body.menu-open {
+    overflow: hidden;
+  }
+  .brand-logo {
+    width: 150px;
+  }
+  .nav-item {
+    padding: 13px 14px;
+    font-size: 0.95rem;
+  }
+  .menu-toggle-btn {
+    display: inline-flex;
+  }
+
+  /* Barra superior compacta */
+  .topbar {
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    gap: 10px;
+  }
+  .topbar-left {
+    gap: 12px;
+    flex: 1 1 100%;
+  }
+  .topbar-title {
+    min-width: 0;
+  }
+  .topbar-title h1 {
+    font-size: 1.3rem;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar-title p {
+    font-size: 0.74rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .topbar-right {
+    width: 100%;
+    gap: 8px;
+  }
+  .mode-switch,
+  .topbar-avatar {
     display: none;
   }
+  .search-pill {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    padding: 9px 14px;
+  }
+  .topbar .btn-soft.btn-sm {
+    height: 40px;
+    padding: 0 12px;
+    flex-shrink: 0;
+  }
+  .icon-circle-btn {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .content-area {
+    padding: 16px 16px calc(36px + env(safe-area-inset-bottom));
+  }
+  .action-bar {
+    margin-bottom: 16px;
+  }
+  .action-bar > div {
+    max-width: 100%;
+  }
+
+  /* Tarjetas y encabezados */
+  .kpi-grid {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .kpi-card {
+    padding: 18px;
+    min-height: 0;
+  }
+  .kpi-value {
+    font-size: 1.75rem;
+  }
+  .kpi-subtext {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .dashboard-grid,
+  .right-stack,
+  .patients-layout {
+    gap: 16px;
+  }
+  .card-header {
+    padding: 16px 18px;
+  }
+  .card-header h2 {
+    font-size: 1.2rem;
+  }
+
+  /* Filas tipo tabla → tarjetas apiladas (anula el grid inline de app.js) */
+  .card-subhead {
+    display: none !important;
+  }
   .list-row {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px 12px;
+    padding: 14px 18px;
+    align-items: start;
+  }
+  .list-row > .row-entity,
+  .list-row > .row-actions {
+    grid-column: 1 / -1;
+  }
+  .list-row > .row-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .list-row > [style*="text-align:right"] {
+    text-align: left !important;
+  }
+  .entity-text h4 {
+    white-space: normal;
+  }
+
+  /* Objetivos táctiles más cómodos */
+  .round-action-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .btn-sm {
+    min-height: 36px;
+  }
+  .cal-day {
+    height: 40px;
+  }
+  .cal-arrow {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Expedientes */
+  .clinical-detail-header,
+  .clinical-body {
+    padding: 18px;
+  }
+  .clinical-body {
+    gap: 20px;
+  }
+  .ba-slider-container {
+    height: 260px;
+  }
+  .routine-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Portal del cliente */
+  .client-portal-stage {
+    gap: 18px;
+  }
+  .phone-mockup {
+    border-width: 0;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+  }
+  .phone-body {
+    padding: 16px;
+  }
+  .phone-avatar-box {
+    width: 52px;
+    height: 52px;
+  }
+
+  /* Formularios: 16px evita el zoom automático de iOS al enfocar */
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  .form-control,
+  .search-pill input,
+  .phone-user-select,
+  select,
+  textarea,
+  input {
+    font-size: 16px;
+  }
+
+  /* Modal como hoja inferior */
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-box {
+    max-width: 100%;
+    max-height: 92vh;
+    max-height: 92dvh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-width: 1px 0 0;
+    animation: sheetUp 0.25s ease;
+  }
+  .modal-header {
+    padding: 16px 18px;
+    position: sticky;
+    top: 0;
+    background: var(--bg-surface);
+    z-index: 2;
+  }
+  .modal-body {
+    padding: 18px;
+  }
+  .modal-footer {
+    padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-surface);
+    flex-wrap: wrap;
+  }
+  .modal-footer > button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  /* Notificaciones */
+  .toast-container {
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar .btn-label {
+    display: none;
+  }
+  .topbar-title p {
+    display: none;
+  }
+  .action-bar > div:last-child {
+    width: 100%;
+  }
+  .action-bar > div:last-child > .btn-gold,
+  .action-bar > div:last-child > .btn-soft {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .phone-slots-grid {
     gap: 8px;
+  }
+  .phone-slot-pill {
+    padding: 11px 4px;
+  }
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-overlay,
+  .modal-box,
+  .toast {
+    transition: none;
+    animation: none;
   }
 }

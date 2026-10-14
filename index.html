@@ -2,7 +2,15 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- Forzar siempre el tema claro: el modo oscuro del sistema no altera los colores de la app -->
+  <meta name="color-scheme" content="only light">
+  <meta name="supported-color-schemes" content="light">
+  <meta name="theme-color" content="#FAF8F4">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Niskin">
   <title>Niskin Beauty Studio — Gestión Cosmetológica & Portal de Clientes</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +20,7 @@
 <body>
   <div class="app-layout">
     <!-- BARRA LATERAL (FIEL AL BOCETO 1 + LOGO NISKIN BEAUTY STUDIO) -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="appSidebar">
       <div>
         <div class="brand-box" onclick="switchView('dashboard')" title="Ir al Panel Principal">
           <img src="assets/logo.svg" alt="Niskin Beauty Studio Logo" class="brand-logo">
@@ -89,11 +97,15 @@
         </div>
       </div>
     </aside>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu(false)"></div>
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div class="main-wrapper">
       <header class="topbar">
         <div class="topbar-left">
+          <button class="menu-toggle-btn" id="menuToggleBtn" onclick="toggleMobileMenu()" aria-label="Abrir menú" aria-controls="appSidebar" aria-expanded="false">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </button>
           <div class="topbar-title">
             <h1 id="topbarHeading">Panel General Niskin</h1>
             <p id="topbarSubheading">Resumen ejecutivo de citas, ingresos, inventario y evolución de pacientes</p>
@@ -111,7 +123,7 @@
           </div>
 
           <button class="btn-soft btn-sm" onclick="openRenderConfigModal()" title="Configurar URL del Servidor Render + MongoDB">
-            ☁️ Render API
+            ☁️ <span class="btn-label">Render API</span>
           </button>
 
           <div class="search-pill">
@@ -124,7 +136,7 @@
             <span class="notif-dot"></span>
           </button>
 
-          <div class="avatar-circle" style="width:38px;height:38px;cursor:pointer;" onclick="switchView('patients')" title="Ver Expedientes Clínicos">
+          <div class="avatar-circle topbar-avatar" style="width:38px;height:38px;cursor:pointer;" onclick="switchView('patients')" title="Ver Expedientes Clínicos">
             VN
           </div>
         </div>
