@@ -1,38 +1,33 @@
-# Niskin Beauty Studio — Arquitectura Full-Stack (Render + MongoDB + Hostinger)
+# Niskin Beauty Studio — Opción B: Frontend en Hostinger + Backend en Render (MongoDB)
 
-Aplicación web integral de gestión cosmetológica y portal de clientes para **Niskin Beauty Studio**, configurada con servidor **Node.js + Express** para **Render** y base de datos **MongoDB Atlas (Mongoose)**.
+Arquitectura desacoplada donde la interfaz web (**Frontend**) se aloja en el `public_html` de tu dominio en **Hostinger** y se comunica vía API REST (`CORS`) con tu servidor **Node.js + Express** en **Render** conectado a **MongoDB Atlas**.
 
-## Estructura del Proyecto
+## 1. Desplegar el Backend en Render + MongoDB Atlas (Desde GitHub)
 
-- `server.js`: Servidor Express para **Render** que expone la API REST (`/api/state`, `/api/health`) con soporte de hasta 25 MB por petición para subir fotografías clínicas de "Antes y Después", además de servir la aplicación web.
-- `models/StudioData.js`: Esquemas y modelos de **Mongoose (MongoDB)** para las 6 colecciones del estudio: `patients` (incluyendo sesiones, métricas y fotos Antes/Después), `appointments`, `inventory`, `finances`, `treatments` y `specialists`.
-- `package.json`: Configuración de dependencias (`express`, `mongoose`, `cors`, `dotenv`) y script `npm start` listo para Render.
-- `render.yaml`: Archivo Blueprint de Render para desplegar el servicio web automáticamente.
-- `.env.example`: Plantilla para configurar la variable `MONGODB_URI` con tu cluster de MongoDB Atlas.
-- `index.html`, `styles.css`, `app.js`, `data.js`, `assets/logo.svg`: Interfaz administrativa y portal móvil de clientes sincronizados con `/api/state`.
+El repositorio Git local ya contiene el servidor (`server.js`), los modelos de MongoDB (`models/StudioData.js`), `package.json` y `render.yaml`:
 
-## Paso 1: Crear la Base de Datos en MongoDB Atlas
-
-1. Entra a **MongoDB Atlas** (`https://cloud.mongodb.com`) y crea un cluster gratuito (**M0**).
-2. En **Database Access**, crea un usuario con contraseña.
-3. En **Network Access**, agrega la IP `0.0.0.0/0` (necesario para permitir la conexión desde los servidores dinámicos de Render).
-4. Haz clic en **Connect → Drivers** y copia tu cadena de conexión (`mongodb+srv://usuario:password@cluster0.xxxx.mongodb.net/niskin_beauty_studio?retryWrites=true&w=majority`).
-
-## Paso 2: Desplegar el Servidor en Render
-
-1. Sube esta carpeta `Niskin` a un repositorio en tu cuenta de **GitHub**.
-2. Entra a **Render** (`https://dashboard.render.com`), haz clic en **New + → Web Service** y conecta tu repositorio de GitHub.
-3. Verifica la configuración:
-   - **Runtime:** `Node`
+1. **Sube los cambios a tu repositorio (`https://github.com/libradobe/Niskin.git`):**
+   Ejecuta en tu Terminal:
+   ```bash
+   cd /Users/libradobe/Documents/Niskin && git push -u origin main
+   ```
+2. **Conecta el repositorio en Render (`https://dashboard.render.com`):**
+   - Haz clic en **New + → Web Service** y selecciona tu repositorio `libradobe/Niskin`.
    - **Build Command:** `npm install`
    - **Start Command:** `npm start`
-4. En la sección **Environment Variables** de Render, agrega:
-   - `MONGODB_URI` = *(pega tu cadena de conexión de MongoDB Atlas)*
-5. Al iniciar por primera vez, la aplicación poblará automáticamente tus colecciones en MongoDB con el catálogo inicial de tratamientos, especialistas e inventario de **Niskin Beauty Studio**.
+   - En **Environment Variables**, agrega `MONGODB_URI` con tu cadena de conexión de **MongoDB Atlas** (`mongodb+srv://...`).
+3. **Copia tu URL de Render:**
+   - Una vez desplegado, Render te dará una URL pública como `https://niskin.onrender.com`.
 
-## Paso 3: Conectar tu Dominio de Hostinger
+## 2. Subir el Frontend a Hostinger (`public_html`)
 
-Tienes dos formas de usar tu dominio o alojamiento de **Hostinger** con **Render**:
+He generado el paquete exclusivo de Frontend llamado **`Niskin-Frontend-Hostinger.zip`** que contiene únicamente los archivos estáticos que van en Hostinger (`index.html`, `styles.css`, `config.js`, `data.js`, `app.js`, `assets/logo.svg` y `.htaccess`):
 
-- **Opción A (Dominio personalizado directo en Render):** En tu panel de Render ve a **Settings → Custom Domains**, agrega tu dominio de Hostinger (ej. `app.niskinbeautystudio.com`) y apunta el registro `CNAME` en la zona DNS de tu **hPanel de Hostinger** hacia tu URL `.onrender.com`.
-- **Opción B (Frontend en Hostinger + Backend en Render):** Si subes los archivos estáticos (`index.html`, `styles.css`, `app.js`, `data.js`, `assets/`) al `public_html` de Hostinger, solo coloca la URL de tu servidor de Render en la constante `RENDER_BACKEND_URL` en la línea 9 de `app.js` (ej. `'https://niskin-beauty-studio.onrender.com'`).
+1. Entra a tu **hPanel de Hostinger → Sitios Web → Administrar → Archivos → Administrador de archivos** y abre la carpeta **`public_html`**.
+2. Sube el archivo **`Niskin-Frontend-Hostinger.zip`**, haz clic derecho sobre él y selecciona **Extraer (Extract)** en `.`.
+3. **Conecta tu Frontend de Hostinger con tu URL de Render:**
+   - Puedes editar la línea 9 de **`config.js`** en el Administrador de archivos de Hostinger:
+     ```javascript
+     window.NISKIN_RENDER_URL = 'https://tu-servicio.onrender.com';
+     ```
+   - O bien, abre tu página web en el navegador, haz clic en el botón **`☁️ Render API`** de la barra superior, pega tu URL de Render y presiona **🔍 Probar Conexión** y **Guardar y Sincronizar**.

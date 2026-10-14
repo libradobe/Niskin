@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Niskin Beauty Studio — Gestión Cosmetológica & Portal de Clientes</title>
-  <!-- Tipografías elegantes para Niskin Beauty Studio -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -82,7 +81,6 @@
         </ul>
       </div>
 
-      <!-- Tarjeta Inferior de Perfil (Boceto 1) -->
       <div class="sidebar-profile">
         <div class="avatar-circle">VN</div>
         <div class="profile-meta">
@@ -94,7 +92,6 @@
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div class="main-wrapper">
-      <!-- BARRA SUPERIOR (FIEL AL BOCETO 1) -->
       <header class="topbar">
         <div class="topbar-left">
           <div class="topbar-title">
@@ -104,7 +101,6 @@
         </div>
 
         <div class="topbar-right">
-          <!-- Selector rápido entre Panel Admin y Portal Cliente -->
           <div class="mode-switch">
             <button id="modeAdminBtn" class="mode-btn active" onclick="switchView('dashboard')">
               💻 Estudio Admin
@@ -113,6 +109,10 @@
               📱 App Cliente
             </button>
           </div>
+
+          <button class="btn-soft btn-sm" onclick="openRenderConfigModal()" title="Configurar URL del Servidor Render + MongoDB">
+            ☁️ Render API
+          </button>
 
           <div class="search-pill">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -130,7 +130,6 @@
         </div>
       </header>
 
-      <!-- ÁREA DINÁMICA DE CONTENIDO -->
       <main id="workspaceContent" class="content-area"></main>
     </div>
   </div>
@@ -150,6 +149,7 @@
   <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
   <div id="toastContainer" class="toast-container"></div>
 
+  <script src="config.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>

@@ -1,6 +1,5 @@
 node_modules/
 .env
 .DS_Store
-storage/*.json
-storage/*.sqlite
-Niskin-Hostinger-Deploy.zip
+*.zip
+storage/

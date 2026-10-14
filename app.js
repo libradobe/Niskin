@@ -1,24 +1,23 @@
 const STORAGE_KEY = 'niskin_studio_state_v1';
+const RENDER_URL_STORAGE_KEY = 'niskin_render_backend_url';
 
-/**
- * URL del servidor Backend en Render:
- * - Si sirves toda la aplicación directamente desde Render, déjalo vacío ('') y usará '/api/state' automáticamente.
- * - Si subes el frontend a tu dominio en Hostinger y el servidor Node.js corre en Render,
- *   coloca aquí la URL de tu servicio en Render, por ejemplo: 'https://niskin-beauty-studio.onrender.com'
- */
-const RENDER_BACKEND_URL = window.NISKIN_RENDER_URL || '';
+function getRenderBaseUrl() {
+  const saved = localStorage.getItem(RENDER_URL_STORAGE_KEY);
+  const base = saved !== null ? saved : (window.NISKIN_RENDER_URL || '');
+  return base.trim().replace(/\/+$/, '');
+}
 
-function getApiEndpoint() {
-  const base = RENDER_BACKEND_URL.replace(/\/+$/, '');
-  return `${base}/api/state`;
+function getApiEndpoint(path = '/api/state') {
+  const base = getRenderBaseUrl();
+  return base ? `${base}${path}` : path;
 }
 
 let state = loadState();
 
 let uiState = {
-  currentView: 'dashboard', // 'dashboard' | 'agenda' | 'patients' | 'inventory' | 'treatments' | 'finances' | 'client-portal'
+  currentView: 'dashboard',
   selectedDate: '2026-10-14',
-  calendarMonth: 9, // 0-indexed: 9 = Octubre
+  calendarMonth: 9,
   calendarYear: 2026,
   selectedPatientId: state.patients[0]?.id || 'pac-1',
   searchQuery: '',
@@ -26,10 +25,10 @@ let uiState = {
   inventoryFilter: 'Todos',
   financeFilter: 'Todos',
   serverSynced: false,
-  backendLabel: '',
+  backendLabel: 'Modo Local (Pendiente conectar Render)',
   // Estado del Portal del Cliente (Boceto Móvil 3)
   portalClientId: state.patients[0]?.id || 'pac-1',
-  portalTab: 'booking', // 'booking' | 'record'
+  portalTab: 'booking',
   portalSelectedSpecialistId: state.specialists[0]?.id || 'esp-1',
   portalSelectedTreatmentId: state.treatments[1]?.id || 'trat-2',
   portalSelectedDate: '2026-10-21',
@@ -55,9 +54,10 @@ function saveState() {
     console.warn('Error guardando estado en localStorage:', e);
   }
 
-  // Sincronización automática con el servidor de Render (MongoDB)
-  if (window.location.protocol.startsWith('http') || RENDER_BACKEND_URL) {
-    fetch(getApiEndpoint(), {
+  // Sincronización con el Backend en Render + MongoDB Atlas
+  const endpoint = getApiEndpoint('/api/state');
+  if (getRenderBaseUrl() || window.location.protocol.startsWith('http')) {
+    fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state })
@@ -66,70 +66,95 @@ function saveState() {
       .then(resp => {
         if (resp && resp.status === 'ok') {
           uiState.serverSynced = true;
-          uiState.backendLabel = 'Render + MongoDB';
+          uiState.backendLabel = 'Conectado a Render + MongoDB';
         }
       })
       .catch(() => {
-        // Respaldo secundario si se aloja solo en Hostinger PHP sin Render configurado aún
-        if (window.location.protocol.startsWith('http') && !RENDER_BACKEND_URL) {
-          fetch('api.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state })
-          }).catch(() => {});
-        }
+        // Permanece respaldado en localStorage mientras el servidor Render despierta
       });
   }
 }
 
 async function syncFromCloudServer() {
-  if (!window.location.protocol.startsWith('http') && !RENDER_BACKEND_URL) return;
+  const endpoint = getApiEndpoint('/api/state');
+  if (!getRenderBaseUrl() && !window.location.protocol.startsWith('http')) return;
 
-  // 1. Intentar sincronizar con el Backend Node.js en Render + MongoDB
   try {
-    const res = await fetch(getApiEndpoint(), { cache: 'no-store' });
+    const res = await fetch(endpoint, { cache: 'no-store' });
     if (res.ok) {
       const payload = await res.json();
       if (payload && payload.status === 'ok') {
         uiState.serverSynced = true;
-        uiState.backendLabel = 'Render + MongoDB';
+        uiState.backendLabel = 'Conectado a Render + MongoDB';
         if (payload.hasServerData && payload.data) {
           state = payload.data;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           renderWorkspace();
         } else {
-          // Si la colección en MongoDB está recién creada, siembra los datos iniciales
+          // Si la base de datos MongoDB en Render está vacía, siembra el catálogo inicial de Niskin
           saveState();
         }
-        return;
       }
     }
   } catch (e) {
-    // Continúa al fallback si Render aún no responde
+    uiState.serverSynced = false;
   }
+}
 
-  // 2. Fallback automático a api.php en Hostinger si aún no se ha conectado Render
-  if (window.location.protocol.startsWith('http') && !RENDER_BACKEND_URL) {
-    try {
-      const resPhp = await fetch('api.php', { cache: 'no-store' });
-      if (resPhp.ok) {
-        const payloadPhp = await resPhp.json();
-        if (payloadPhp && payloadPhp.status === 'ok') {
-          uiState.serverSynced = true;
-          uiState.backendLabel = 'Hostinger Storage';
-          if (payloadPhp.hasServerData && payloadPhp.data) {
-            state = payloadPhp.data;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            renderWorkspace();
-          } else {
-            saveState();
-          }
-        }
-      }
-    } catch (e) {
-      // Modo local offline
-    }
+function openRenderConfigModal() {
+  const currentUrl = getRenderBaseUrl();
+  openModalWithHTML(
+    'Conexión Hostinger (Frontend) ↔ Render + MongoDB (Backend)',
+    `
+      <div style="font-size:0.84rem;color:var(--text-secondary);background:#FAF6EE;padding:12px 14px;border-radius:10px;border:1px solid var(--border-card);">
+        <strong>Arquitectura Opción B activa:</strong> Tu interfaz web vive en <strong>Hostinger</strong> y se conecta mediante API a tu servidor Node.js en <strong>Render</strong> + <strong>MongoDB Atlas</strong>.
+      </div>
+      <div class="form-group">
+        <label>URL de tu Web Service en Render</label>
+        <input type="url" id="mRenderUrlInput" class="form-control" value="${currentUrl}" placeholder="https://niskin.onrender.com">
+        <span style="font-size:0.75rem;color:var(--text-muted);">
+          También puedes dejarla fija editando el archivo <code>config.js</code> antes de subirlo a Hostinger.
+        </span>
+      </div>
+      <div id="renderHealthResult" style="font-size:0.82rem;color:var(--text-secondary);"></div>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cerrar</button>
+      <button class="btn-soft" onclick="testRenderConnection()">🔍 Probar Conexión</button>
+      <button class="btn-gold" onclick="saveRenderUrlConfig()">Guardar y Sincronizar</button>
+    `
+  );
+}
+
+async function testRenderConnection() {
+  const inputUrl = document.getElementById('mRenderUrlInput').value.trim().replace(/\/+$/, '');
+  const statusBox = document.getElementById('renderHealthResult');
+  if (!inputUrl) {
+    statusBox.innerHTML = `<span style="color:var(--status-danger-text);">Ingresa una URL válida de Render (ej. https://niskin.onrender.com).</span>`;
+    return;
   }
+  statusBox.innerHTML = `⏳ Verificando conexión con <strong>${inputUrl}/api/health</strong>...`;
+  try {
+    const res = await fetch(`${inputUrl}/api/health`, { cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      statusBox.innerHTML = `<span style="color:var(--status-success-text);font-weight:600;">✅ Servidor Render en línea • MongoDB Atlas: ${data.mongoConnected ? 'Conectado' : 'Pendiente configurar MONGODB_URI en Render'}</span>`;
+    } else {
+      statusBox.innerHTML = `<span style="color:var(--status-warning-text);">⚠️ El servidor respondió pero revisa la configuración en Render.</span>`;
+    }
+  } catch (err) {
+    statusBox.innerHTML = `<span style="color:var(--status-danger-text);">❌ Aún no se pudo conectar con ${inputUrl}. Verifica que el servicio en Render esté desplegado y activo.</span>`;
+  }
+}
+
+function saveRenderUrlConfig() {
+  const inputUrl = document.getElementById('mRenderUrlInput').value.trim().replace(/\/+$/, '');
+  localStorage.setItem(RENDER_URL_STORAGE_KEY, inputUrl);
+  window.NISKIN_RENDER_URL = inputUrl;
+  closeModal();
+  showToast(`URL de Render guardada: ${inputUrl || 'Modo Local'}`);
+  syncFromCloudServer();
+  renderWorkspace();
 }
 
 function formatMoney(amount) {
@@ -255,7 +280,9 @@ function renderDashboardView() {
       <div>
         <span style="font-size:0.85rem;color:var(--text-secondary);">
           Fecha seleccionada en agenda: <strong>${uiState.selectedDate}</strong> • ${todayAppointments.length} cita(s) en ese día
-          ${uiState.serverSynced ? ` • <span style="color:var(--status-success-text);font-weight:600;">☁️ Sincronizado (${uiState.backendLabel})</span>` : ''}
+          ${uiState.serverSynced
+            ? ` • <span style="color:var(--status-success-text);font-weight:600;">☁️ ${uiState.backendLabel}</span>`
+            : ` • <span style="color:var(--text-muted);cursor:pointer;text-decoration:underline;" onclick="openRenderConfigModal()">☁️ Destino API: ${getRenderBaseUrl()}</span>`}
         </span>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -708,7 +735,7 @@ function renderPatientsView() {
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
               <div>
                 <h3 style="font-family:var(--font-serif);font-size:1.35rem;">Registro Fotográfico de Evolución (Antes vs. Después)</h3>
-                <p style="font-size:0.82rem;color:var(--text-secondary);">Desliza el control central hacia los lados para comparar la mejoría clínica o sube nuevas fotografías desde tu equipo (se guardan en MongoDB).</p>
+                <p style="font-size:0.82rem;color:var(--text-secondary);">Desliza el control central hacia los lados para comparar la mejoría clínica o sube nuevas fotografías desde tu equipo (se sincronizan con Render + MongoDB).</p>
               </div>
               <div style="display:flex;gap:8px;">
                 <label class="btn-soft btn-sm" style="cursor:pointer;">
@@ -2021,6 +2048,6 @@ document.addEventListener('DOMContentLoaded', () => {
     switchView('dashboard');
   }
 
-  // Sincroniza automáticamente con Render + MongoDB
+  // Sincroniza automáticamente el Frontend en Hostinger con el Backend en Render + MongoDB
   syncFromCloudServer();
 });
