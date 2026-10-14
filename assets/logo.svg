@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 190" fill="none">
+  <defs>
+    <linearGradient id="niskinGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8C6932" />
+      <stop offset="28%" stop-color="#D5B87C" />
+      <stop offset="52%" stop-color="#A8844A" />
+      <stop offset="78%" stop-color="#DFC58E" />
+      <stop offset="100%" stop-color="#8E6B35" />
+    </linearGradient>
+    <filter id="softDrop" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#6B4F23" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <g filter="url(#softDrop)">
+    <text x="235" y="114" text-anchor="middle" font-family="'Cormorant Garamond', 'Playfair Display', 'Snell Roundhand', Georgia, serif" font-size="94" font-style="italic" font-weight="600" fill="url(#niskinGold)" letter-spacing="1">Niskin</text>
+    <path d="M 358 108 C 385 113, 422 104, 462 86" stroke="url(#niskinGold)" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+    <path d="M 392 106 C 390 92, 401 84, 405 90 C 406 96, 398 104, 392 106 Z" stroke="url(#niskinGold)" stroke-width="2.4" fill="none"/>
+    <path d="M 418 100 C 417 85, 430 78, 433 85 C 434 91, 425 98, 418 100 Z" stroke="url(#niskinGold)" stroke-width="2.4" fill="none"/>
+    <path d="M 444 92 C 452 82, 468 79, 473 83 C 466 91, 453 94, 444 92 Z" stroke="url(#niskinGold)" stroke-width="2.4" fill="none"/>
+    <path d="M 398 107 C 406 116, 420 117, 422 111 C 418 106, 406 106, 398 107 Z" stroke="url(#niskinGold)" stroke-width="2.3" fill="none"/>
+    <path d="M 426 99 C 436 108, 449 111, 452 105 C 446 99, 434 98, 426 99 Z" stroke="url(#niskinGold)" stroke-width="2.3" fill="none"/>
+  </g>
+  <g filter="url(#softDrop)">
+    <line x1="78" y1="146" x2="142" y2="146" stroke="url(#niskinGold)" stroke-width="1.6" stroke-linecap="round"/>
+    <text x="260" y="152" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Montserrat', sans-serif" font-size="17" font-weight="600" fill="url(#niskinGold)" letter-spacing="6.5">BEAUTY STUDIO</text>
+    <line x1="378" y1="146" x2="442" y2="146" stroke="url(#niskinGold)" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+</svg>
