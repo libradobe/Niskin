@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261014c">
+  <link rel="stylesheet" href="styles.css?v=20261014d">
 </head>
 <body>
   <div class="app-layout">
@@ -76,6 +76,15 @@
             </button>
           </li>
 
+          <li class="manager-only" hidden>
+            <button class="nav-item" data-view="team" onclick="switchView('team')">
+              <span class="nav-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.6 4-5.5 6.5-5.5s5.5 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5c2.6 0 4.6 1.6 5.5 4.5"/></svg>
+              </span>
+              <span>Equipo y Accesos</span>
+            </button>
+          </li>
+
           <div class="nav-divider"></div>
 
           <li>
@@ -98,10 +107,10 @@
       </div>
 
       <div class="sidebar-profile">
-        <div class="avatar-circle">VN</div>
-        <div class="profile-meta">
-          <h4>Lic. Valeria Niskin</h4>
-          <p>Cosmetóloga Principal</p>
+        <button class="avatar-circle profile-avatar" id="sidebarAvatar" onclick="openMyAccountModal()" title="Mi cuenta">NB</button>
+        <div class="profile-meta" onclick="openMyAccountModal()" title="Mi cuenta">
+          <h4 id="sidebarStaffName">Equipo Niskin</h4>
+          <p id="sidebarStaffRole">Panel del estudio</p>
         </div>
         <button class="round-action-btn logout-btn" onclick="adminLogout()" title="Cerrar sesión" aria-label="Cerrar sesión">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -147,8 +156,8 @@
             <span class="notif-dot"></span>
           </button>
 
-          <div class="avatar-circle topbar-avatar" style="width:38px;height:38px;cursor:pointer;" onclick="switchView('patients')" title="Ver Expedientes Clínicos">
-            VN
+          <div class="avatar-circle topbar-avatar" id="topbarAvatar" style="width:38px;height:38px;cursor:pointer;" onclick="openMyAccountModal()" title="Mi cuenta">
+            NB
           </div>
         </div>
       </header>
@@ -164,9 +173,14 @@
       <h1 id="adminGateTitle">Panel del Estudio</h1>
       <p class="admin-gate-sub">Acceso exclusivo para el equipo de Niskin Beauty Studio.</p>
       <div class="form-group">
+        <label for="adminEmailInput">Correo</label>
+        <input type="email" id="adminEmailInput" class="form-control" autocomplete="username" inputmode="email" placeholder="tucorreo@ejemplo.com">
+      </div>
+      <div class="form-group">
         <label for="adminPasswordInput">Contraseña</label>
         <input type="password" id="adminPasswordInput" class="form-control" autocomplete="current-password" required>
       </div>
+      <p class="admin-gate-hint">¿Usas la contraseña maestra del estudio? Deja el correo vacío.</p>
       <p id="adminGateMessage" class="form-message" role="alert" hidden></p>
       <button type="submit" id="adminLoginBtn" class="btn-gold btn-block">Entrar al panel</button>
       <a class="admin-gate-link" href="clientes.html">¿Eres clienta? Agenda tu cita aquí →</a>
@@ -189,8 +203,9 @@
   <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="config.js?v=20261014c"></script>
-  <script src="data.js?v=20261014c"></script>
-  <script src="app.js?v=20261014c"></script>
+  <script src="theme-guard.js?v=20261014d"></script>
+  <script src="config.js?v=20261014d"></script>
+  <script src="data.js?v=20261014d"></script>
+  <script src="app.js?v=20261014d"></script>
 </body>
 </html>

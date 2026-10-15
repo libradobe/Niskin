@@ -1519,6 +1519,107 @@ select.form-control,
   cursor: pointer;
 }
 
+.admin-gate-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: -6px;
+}
+
+.profile-avatar {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.profile-meta {
+  cursor: pointer;
+}
+
+.team-account-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.team-credentials {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-subtle);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.team-credentials li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.88rem;
+}
+
+.team-credentials li span {
+  color: var(--text-secondary);
+}
+
+.team-credentials li strong {
+  font-family: ui-monospace, Menlo, monospace;
+  word-break: break-all;
+  text-align: right;
+}
+
+.team-role-select {
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  max-width: 170px;
+}
+
+/* Aviso de modo oscuro forzado (Samsung Internet) */
+.dark-notice {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 300;
+  max-width: 460px;
+  margin: 0 auto;
+  background: #FFFFFF;
+  color: #3C3226;
+  border: 1px solid #D5C3A3;
+  border-radius: 18px;
+  box-shadow: 0 18px 42px rgba(92, 71, 38, 0.25);
+  padding: 16px 18px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dark-notice strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.dark-notice ol {
+  margin: 8px 0 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dark-notice button {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  background: #A8844A;
+  color: #FFFFFF;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
 /* Toast Notification */
 .toast-container {
   position: fixed;

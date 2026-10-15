@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'niskin_studio_state_v1';
 const RENDER_URL_STORAGE_KEY = 'niskin_render_backend_url';
 const ADMIN_TOKEN_KEY = 'niskin_admin_token';
+const ADMIN_STAFF_KEY = 'niskin_admin_staff';
 
 function getAdminToken() {
   try {
@@ -200,7 +201,9 @@ function saveRenderUrlConfig() {
 function showAdminGate(message) {
   try {
     localStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_STAFF_KEY);
   } catch (e) {}
+  uiState.teamList = null;
   document.body.classList.add('admin-locked');
   const workspace = document.getElementById('workspaceContent');
   if (workspace) workspace.innerHTML = '';
@@ -219,9 +222,11 @@ function hideAdminGate() {
 async function submitAdminLogin(event) {
   event.preventDefault();
   const input = document.getElementById('adminPasswordInput');
+  const emailInput = document.getElementById('adminEmailInput');
   const button = document.getElementById('adminLoginBtn');
   const msg = document.getElementById('adminGateMessage');
   const password = input.value;
+  const email = emailInput.value.trim();
   if (!password) return;
 
   button.disabled = true;
@@ -236,18 +241,19 @@ async function submitAdminLogin(event) {
     const res = await fetch(getApiEndpoint('/api/admin/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
+      body: JSON.stringify({ email, password })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.token) {
       throw new Error(data.message || 'No se pudo iniciar sesión.');
     }
     localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+    setCurrentStaff(data.staff);
     input.value = '';
     hideAdminGate();
     switchView(uiState.currentView || 'dashboard');
     await syncFromCloudServer();
-    showToast('Bienvenida al panel de Niskin Beauty Studio.');
+    showToast(`Bienvenida, ${nameWithoutTitles(data.staff?.name || 'equipo Niskin')[0]}.`);
   } catch (err) {
     msg.textContent = err.message === 'Failed to fetch'
       ? 'No se pudo conectar con el servidor. Revisa tu conexión o la URL del servidor.'
@@ -257,6 +263,439 @@ async function submitAdminLogin(event) {
     clearTimeout(slowTimer);
     button.disabled = false;
     button.textContent = 'Entrar al panel';
+  }
+}
+
+// ============================================================================
+// USUARIA CONECTADA (administradora o cosmetóloga)
+// ============================================================================
+const STAFF_ROLE_LABELS = {
+  administradora: 'Administradora',
+  cosmetologa: 'Cosmetóloga'
+};
+
+function escapeHTML(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getCurrentStaff() {
+  try {
+    return JSON.parse(localStorage.getItem(ADMIN_STAFF_KEY) || 'null');
+  } catch (e) {
+    return null;
+  }
+}
+
+function isStaffManager() {
+  return getCurrentStaff()?.role === 'administradora';
+}
+
+function setCurrentStaff(staff) {
+  try {
+    if (staff) localStorage.setItem(ADMIN_STAFF_KEY, JSON.stringify(staff));
+  } catch (e) {}
+  applyStaffToUI();
+}
+
+function applyStaffToUI() {
+  const staff = getCurrentStaff();
+  const name = staff?.name || 'Equipo Niskin';
+  const initials = getInitials(name);
+  const roleLabel = staff?.isMaster ? 'Contraseña maestra' : (STAFF_ROLE_LABELS[staff?.role] || 'Panel del estudio');
+  const setText = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  setText('sidebarStaffName', name);
+  setText('sidebarStaffRole', roleLabel);
+  setText('sidebarAvatar', initials);
+  setText('topbarAvatar', initials);
+  document.querySelectorAll('.manager-only').forEach(el => {
+    el.hidden = !isStaffManager();
+  });
+  if (uiState.currentView === 'team' && !isStaffManager()) switchView('dashboard');
+}
+
+async function refreshCurrentStaff() {
+  if (!getAdminToken()) return;
+  try {
+    const res = await fetch(getApiEndpoint('/api/admin/me'), { cache: 'no-store', headers: authHeaders() });
+    if (res.status === 401) {
+      showAdminGate('Tu sesión terminó o tu acceso fue desactivado. Ingresa de nuevo.');
+      return;
+    }
+    const data = await res.json();
+    if (data.staff) setCurrentStaff(data.staff);
+  } catch (e) {}
+}
+
+async function adminApi(path, { method = 'GET', body } = {}) {
+  let res;
+  try {
+    res = await fetch(getApiEndpoint(path), {
+      method,
+      cache: 'no-store',
+      headers: authHeaders(body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (e) {
+    throw new Error('No se pudo conectar con el servidor. Intenta de nuevo.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    showAdminGate('Tu sesión expiró. Ingresa de nuevo.');
+    throw new Error(data.message || 'Sesión expirada.');
+  }
+  if (!res.ok) throw new Error(data.message || 'Ocurrió un error.');
+  return data;
+}
+
+function generateTempPassword() {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const values = new Uint32Array(10);
+  crypto.getRandomValues(values);
+  return Array.from(values, v => chars[v % chars.length]).join('');
+}
+
+function fillTempPassword(inputId) {
+  const input = document.getElementById(inputId);
+  input.type = 'text';
+  input.value = generateTempPassword();
+  input.select();
+}
+
+function openMyAccountModal() {
+  const staff = getCurrentStaff() || {};
+  const isMaster = staff.isMaster || staff.id === 'owner';
+  openModalWithHTML(
+    'Mi cuenta',
+    `
+      <div class="team-account-head">
+        <div class="avatar-circle" style="width:52px;height:52px;font-size:1.05rem;">${escapeHTML(getInitials(staff.name || 'Equipo Niskin'))}</div>
+        <div>
+          <h4 style="font-size:1rem;">${escapeHTML(staff.name || 'Equipo Niskin')}</h4>
+          <p style="font-size:0.82rem;color:var(--text-secondary);">${isMaster ? 'Acceso con contraseña maestra' : `${escapeHTML(STAFF_ROLE_LABELS[staff.role] || '')} • ${escapeHTML(staff.email || '')}`}</p>
+        </div>
+      </div>
+      ${isMaster ? `
+        <p class="form-message success">Estás usando la contraseña maestra. Para mayor seguridad, crea tu propia cuenta de administradora en <strong>Equipo y Accesos</strong> y úsala a diario.</p>
+      ` : `
+        <h4 style="font-size:0.92rem;margin-top:4px;">Cambiar mi contraseña</h4>
+        <div class="form-group">
+          <label for="mMyCurrentPass">Contraseña actual</label>
+          <input type="password" id="mMyCurrentPass" class="form-control" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+          <label for="mMyNewPass">Nueva contraseña (mínimo 8 caracteres)</label>
+          <input type="password" id="mMyNewPass" class="form-control" autocomplete="new-password">
+        </div>
+        <p id="mMyAccountMsg" class="form-message" hidden></p>
+      `}
+    `,
+    `
+      <button class="btn-soft" onclick="adminLogout()">Cerrar sesión</button>
+      ${isMaster ? '' : '<button class="btn-gold" onclick="saveMyPassword()">Guardar contraseña</button>'}
+    `
+  );
+}
+
+async function saveMyPassword() {
+  const msg = document.getElementById('mMyAccountMsg');
+  const currentPassword = document.getElementById('mMyCurrentPass').value;
+  const newPassword = document.getElementById('mMyNewPass').value;
+  if (newPassword.length < 8) {
+    msg.textContent = 'La nueva contraseña debe tener al menos 8 caracteres.';
+    msg.hidden = false;
+    return;
+  }
+  try {
+    await adminApi('/api/admin/me/password', { method: 'POST', body: { currentPassword, newPassword } });
+    closeModal();
+    showToast('Contraseña actualizada.');
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.hidden = false;
+  }
+}
+
+// ============================================================================
+// VISTA EQUIPO Y ACCESOS (solo administradoras)
+// ============================================================================
+async function loadTeam() {
+  uiState.teamLoading = true;
+  try {
+    const data = await adminApi('/api/admin/staff');
+    uiState.teamList = data.staff;
+    uiState.teamError = '';
+  } catch (err) {
+    uiState.teamError = err.message;
+    uiState.teamList = uiState.teamList || [];
+  } finally {
+    uiState.teamLoading = false;
+  }
+  if (uiState.currentView === 'team') renderWorkspace();
+}
+
+function renderTeamView() {
+  if (!isStaffManager()) {
+    return `<div class="surface-card" style="padding:28px;">Solo una administradora puede gestionar el equipo.</div>`;
+  }
+  if (uiState.teamList === null || uiState.teamList === undefined) {
+    if (!uiState.teamLoading) loadTeam();
+    return `<div class="surface-card" style="padding:28px;color:var(--text-secondary);">Cargando equipo…</div>`;
+  }
+
+  const me = getCurrentStaff() || {};
+  const specialistName = id => state.specialists.find(s => s.id === id)?.name || '';
+  const list = uiState.teamList;
+
+  return `
+    <div class="action-bar">
+      <span style="font-size:0.85rem;color:var(--text-secondary);max-width:620px;">
+        Crea un acceso para cada cosmetóloga. Las <strong>administradoras</strong> además pueden gestionar el equipo. Desactiva una cuenta para quitarle el acceso al instante.
+      </span>
+      <button class="btn-gold" onclick="openNewStaffModal()">
+        <span>＋</span> Nueva cuenta
+      </button>
+    </div>
+
+    ${uiState.teamError ? `<p class="form-message" style="margin-bottom:16px;">${escapeHTML(uiState.teamError)}</p>` : ''}
+
+    <div class="surface-card">
+      <div class="card-header">
+        <h2>Equipo con acceso al panel (${list.length})</h2>
+      </div>
+      <div class="card-subhead" style="grid-template-columns: 2fr 1.2fr 1.3fr 1fr 150px;">
+        <span>Nombre / Correo</span>
+        <span>Rol</span>
+        <span>Perfil en agenda</span>
+        <span>Estado</span>
+        <span style="text-align:right;">Acciones</span>
+      </div>
+      <div class="list-rows">
+        ${list.length ? list.map(member => {
+          const isSelf = member.id === me.id;
+          return `
+            <div class="list-row" style="grid-template-columns: 2fr 1.2fr 1.3fr 1fr 150px;">
+              <div class="row-entity">
+                <div class="avatar-circle" style="width:38px;height:38px;font-size:0.82rem;">${escapeHTML(getInitials(member.name))}</div>
+                <div class="entity-text" style="min-width:0;">
+                  <h4>${escapeHTML(member.name)}${isSelf ? ' (tú)' : ''}</h4>
+                  <p>${escapeHTML(member.email)}</p>
+                </div>
+              </div>
+              <div>
+                <select class="form-control team-role-select" ${isSelf ? 'disabled' : ''} onchange="updateStaff('${escapeHTML(member.id)}', { role: this.value })" aria-label="Rol de ${escapeHTML(member.name)}">
+                  <option value="cosmetologa" ${member.role === 'cosmetologa' ? 'selected' : ''}>Cosmetóloga</option>
+                  <option value="administradora" ${member.role === 'administradora' ? 'selected' : ''}>Administradora</option>
+                </select>
+              </div>
+              <div class="entity-text">
+                <p>${member.specialistId && specialistName(member.specialistId) ? `Agenda: ${escapeHTML(specialistName(member.specialistId))}` : 'Sin perfil en agenda'}</p>
+              </div>
+              <div>
+                <span class="status-pill ${member.active ? 'status-confirmed' : 'status-danger'}"><span class="dot"></span>${member.active ? 'Activa' : 'Desactivada'}</span>
+                <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">
+                  ${member.lastLoginAt ? `Último acceso: ${new Date(member.lastLoginAt).toLocaleDateString('es-DO')}` : 'Aún no ha entrado'}
+                </div>
+              </div>
+              <div class="row-actions">
+                <button class="btn-soft btn-sm" onclick="openResetStaffPasswordModal('${escapeHTML(member.id)}')">Contraseña</button>
+                ${isSelf ? '' : `
+                  <button class="btn-soft btn-sm" onclick="updateStaff('${escapeHTML(member.id)}', { active: ${!member.active} })">
+                    ${member.active ? 'Desactivar' : 'Activar'}
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('') : `
+          <div style="padding:28px;text-align:center;color:var(--text-secondary);">
+            Todavía no hay cuentas del equipo. Crea la primera con <strong>Nueva cuenta</strong>.
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function openNewStaffModal() {
+  const linked = new Set((uiState.teamList || []).map(m => m.specialistId).filter(Boolean));
+  const freeSpecialists = state.specialists.filter(s => !linked.has(s.id));
+  openModalWithHTML(
+    'Nueva cuenta del equipo',
+    `
+      <div class="form-group">
+        <label for="mStaffName">Nombre completo</label>
+        <input id="mStaffName" class="form-control" maxlength="80" placeholder="Ej. Lic. Ana Rodríguez">
+      </div>
+      <div class="form-group">
+        <label for="mStaffEmail">Correo (lo usará para entrar)</label>
+        <input id="mStaffEmail" type="email" class="form-control" maxlength="120" placeholder="ana@ejemplo.com">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mStaffRole">Rol</label>
+          <select id="mStaffRole" class="form-control">
+            <option value="cosmetologa">Cosmetóloga</option>
+            <option value="administradora">Administradora</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mStaffPass">Contraseña temporal</label>
+          <div style="display:flex;gap:6px;">
+            <input id="mStaffPass" type="text" class="form-control" style="flex:1;min-width:0;" autocomplete="off" placeholder="Mínimo 8">
+            <button type="button" class="btn-soft btn-sm" onclick="fillTempPassword('mStaffPass')">Generar</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="mStaffSpecialist">Perfil en la agenda y reservas online</label>
+        <select id="mStaffSpecialist" class="form-control" onchange="document.getElementById('mStaffNewSpecFields').hidden = this.value !== 'new'">
+          <option value="new">Crear perfil nuevo (aparecerá para reservar)</option>
+          ${freeSpecialists.map(s => `<option value="${escapeHTML(s.id)}">Vincular a: ${escapeHTML(s.name)}</option>`).join('')}
+          <option value="none">Sin perfil (solo administración)</option>
+        </select>
+      </div>
+      <div id="mStaffNewSpecFields" class="form-row">
+        <div class="form-group">
+          <label for="mStaffSpecRole">Cargo</label>
+          <input id="mStaffSpecRole" class="form-control" maxlength="80" placeholder="Ej. Cosmetóloga Facial">
+        </div>
+        <div class="form-group">
+          <label for="mStaffSpecialty">Especialidad</label>
+          <input id="mStaffSpecialty" class="form-control" maxlength="120" placeholder="Ej. Peelings y acné">
+        </div>
+      </div>
+      <p class="admin-gate-hint" style="text-align:left;">Comparte el correo y la contraseña temporal con ella. Podrá cambiarla desde <strong>Mi cuenta</strong>.</p>
+      <p id="mStaffMsg" class="form-message" hidden></p>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" id="mStaffSaveBtn" onclick="saveNewStaff()">Crear cuenta</button>
+    `
+  );
+}
+
+async function saveNewStaff() {
+  const msg = document.getElementById('mStaffMsg');
+  const btn = document.getElementById('mStaffSaveBtn');
+  const specValue = document.getElementById('mStaffSpecialist').value;
+  const body = {
+    name: document.getElementById('mStaffName').value.trim(),
+    email: document.getElementById('mStaffEmail').value.trim(),
+    role: document.getElementById('mStaffRole').value,
+    password: document.getElementById('mStaffPass').value,
+    specialistMode: specValue === 'new' || specValue === 'none' ? specValue : 'existing',
+    specialistId: specValue === 'new' || specValue === 'none' ? '' : specValue,
+    specialistRole: document.getElementById('mStaffSpecRole').value.trim(),
+    specialty: document.getElementById('mStaffSpecialty').value.trim()
+  };
+  if (body.password.length < 8) {
+    msg.textContent = 'La contraseña temporal debe tener al menos 8 caracteres (usa “Generar”).';
+    msg.hidden = false;
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const data = await adminApi('/api/admin/staff', { method: 'POST', body });
+    uiState.teamList = [...(uiState.teamList || []), data.staff];
+    showStaffCredentials(data.staff.name, data.staff.email, body.password);
+    await syncFromCloudServer();
+    renderWorkspace();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showStaffCredentials(name, email, password) {
+  const loginUrl = `${window.location.origin}${window.location.pathname}`;
+  const message = `Hola ${nameWithoutTitles(name)[0]}, ya tienes acceso al panel de Niskin Beauty Studio.\nEntra en: ${loginUrl}\nCorreo: ${email}\nContraseña temporal: ${password}\nPuedes cambiarla en "Mi cuenta".`;
+  uiState.pendingCredentials = message;
+  openModalWithHTML(
+    'Cuenta lista',
+    `
+      <p class="form-message success">La cuenta de <strong>${escapeHTML(name)}</strong> está activa. Envíale estos datos por un medio privado (por ejemplo, WhatsApp).</p>
+      <ul class="cp-facts team-credentials">
+        <li><span>Correo</span><strong>${escapeHTML(email)}</strong></li>
+        <li><span>Contraseña temporal</span><strong>${escapeHTML(password)}</strong></li>
+      </ul>
+      <p class="admin-gate-hint" style="text-align:left;">Por seguridad, esta contraseña no se volverá a mostrar. Si se pierde, crea una nueva desde “Contraseña”.</p>
+    `,
+    `
+      <button class="btn-soft" onclick="copyPendingCredentials()">Copiar mensaje</button>
+      <button class="btn-gold" onclick="closeModal()">Listo</button>
+    `
+  );
+}
+
+async function copyPendingCredentials() {
+  try {
+    await navigator.clipboard.writeText(uiState.pendingCredentials || '');
+    showToast('Mensaje copiado. Pégalo en WhatsApp.');
+  } catch (e) {
+    showToast('No se pudo copiar automáticamente; copia los datos manualmente.');
+  }
+}
+
+async function updateStaff(staffId, changes) {
+  try {
+    const data = await adminApi(`/api/admin/staff/${encodeURIComponent(staffId)}`, { method: 'PATCH', body: changes });
+    uiState.teamList = (uiState.teamList || []).map(m => (m.id === staffId ? data.staff : m));
+    if ('active' in changes) showToast(changes.active ? `${data.staff.name} puede volver a entrar.` : `${data.staff.name} ya no tiene acceso.`);
+    if ('role' in changes) showToast(`${data.staff.name} ahora es ${STAFF_ROLE_LABELS[data.staff.role]}.`);
+  } catch (err) {
+    showToast(err.message);
+  }
+  renderWorkspace();
+}
+
+function openResetStaffPasswordModal(staffId) {
+  const member = (uiState.teamList || []).find(m => m.id === staffId);
+  if (!member) return;
+  openModalWithHTML(
+    `Nueva contraseña para ${member.name}`,
+    `
+      <div class="form-group">
+        <label for="mResetPass">Contraseña temporal (mínimo 8 caracteres)</label>
+        <div style="display:flex;gap:6px;">
+          <input id="mResetPass" type="text" class="form-control" style="flex:1;min-width:0;" autocomplete="off">
+          <button type="button" class="btn-soft btn-sm" onclick="fillTempPassword('mResetPass')">Generar</button>
+        </div>
+      </div>
+      <p class="admin-gate-hint" style="text-align:left;">Su contraseña anterior dejará de funcionar. Compártele la nueva.</p>
+      <p id="mResetMsg" class="form-message" hidden></p>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" onclick="saveStaffPassword('${escapeHTML(staffId)}')">Guardar</button>
+    `
+  );
+}
+
+async function saveStaffPassword(staffId) {
+  const msg = document.getElementById('mResetMsg');
+  const password = document.getElementById('mResetPass').value;
+  if (password.length < 8) {
+    msg.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+    msg.hidden = false;
+    return;
+  }
+  try {
+    await adminApi(`/api/admin/staff/${encodeURIComponent(staffId)}`, { method: 'PATCH', body: { password } });
+    const member = (uiState.teamList || []).find(m => m.id === staffId);
+    showStaffCredentials(member?.name || '', member?.email || '', password);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.hidden = false;
   }
 }
 
@@ -287,10 +726,15 @@ function showToast(message) {
   }, 3600);
 }
 
+// Quita títulos como "Lic.", "Dra." o "Est." para iniciales y saludos
+function nameWithoutTitles(name) {
+  const words = String(name || '').split(' ').filter(Boolean);
+  const plain = words.filter(w => !w.endsWith('.'));
+  return plain.length ? plain : words;
+}
+
 function getInitials(name) {
-  return (name || 'NB')
-    .split(' ')
-    .filter(Boolean)
+  return nameWithoutTitles(name || 'NB')
     .slice(0, 2)
     .map(p => p[0].toUpperCase())
     .join('');
@@ -337,6 +781,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 function switchView(viewName) {
+  if (viewName === 'team' && !isStaffManager()) viewName = 'dashboard';
   const viewChanged = uiState.currentView !== viewName;
   uiState.currentView = viewName;
   toggleMobileMenu(false);
@@ -355,6 +800,7 @@ function switchView(viewName) {
     'inventory': ['Inventario de Cabina y Skincare Retail', 'Control de existencias, alertas de stock mínimo y descuento automático por sesión'],
     'treatments': ['Catálogo de Tratamientos y Protocolos', 'Servicios de Niskin Beauty Studio e insumos vinculados por sesión'],
     'finances': ['Finanzas y Flujo de Caja', 'Registro de ingresos por tratamientos, depósitos, ventas de skincare y gastos operativos'],
+    'team': ['Equipo y Accesos', 'Cuentas de administradoras y cosmetólogas que pueden entrar al panel'],
     'client-portal': ['Portal del Cliente — Mi Espacio Niskin', 'Experiencia interactiva para tus clientas: agendar citas, ver su récord y fotos de mejoría']
   };
 
@@ -389,6 +835,9 @@ function renderWorkspace() {
       break;
     case 'finances':
       container.innerHTML = renderFinancesView();
+      break;
+    case 'team':
+      container.innerHTML = renderTeamView();
       break;
     case 'client-portal':
       container.innerHTML = renderClientPortalView();
@@ -2215,6 +2664,9 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     switchView('dashboard');
   }
+
+  applyStaffToUI();
+  refreshCurrentStaff();
 
   // Sincroniza automáticamente el Frontend en Hostinger con el Backend en Render + MongoDB
   syncFromCloudServer();

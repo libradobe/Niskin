@@ -12,11 +12,13 @@ const {
   Finance,
   Treatment,
   Specialist,
-  ClientAccount
+  ClientAccount,
+  StaffAccount
 } = require('./models/StudioData');
 
 const {
   createToken,
+  verifyToken,
   hashPassword,
   verifyPassword,
   safeEqualStrings,
@@ -53,7 +55,7 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Servir solo los archivos públicos del frontend (nunca server.js, modelos ni configuración)
-const PUBLIC_FILES = ['index.html', 'clientes.html', 'styles.css', 'clientes.css', 'app.js', 'clientes.js', 'data.js', 'config.js'];
+const PUBLIC_FILES = ['index.html', 'clientes.html', 'styles.css', 'clientes.css', 'app.js', 'clientes.js', 'data.js', 'config.js', 'theme-guard.js'];
 PUBLIC_FILES.forEach(file => {
   app.get(`/${file}`, (req, res) => res.sendFile(path.join(__dirname, file)));
 });
@@ -105,9 +107,9 @@ function cleanText(value, maxLength = 120) {
 }
 
 function getInitials(name) {
-  return (name || 'NB')
-    .split(' ')
-    .filter(Boolean)
+  const words = String(name || 'NB').split(' ').filter(Boolean);
+  const plain = words.filter(w => !w.endsWith('.'));
+  return (plain.length ? plain : words)
     .slice(0, 2)
     .map(p => p[0].toUpperCase())
     .join('');
@@ -221,22 +223,229 @@ app.get('/api/health', (req, res) => {
 // ============================================================================
 // PANEL ADMINISTRATIVO (requiere contraseña de administradora)
 // ============================================================================
-app.post('/api/admin/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }), (req, res) => {
-  if (!ADMIN_PASSWORD) {
-    return res.status(503).json({
-      status: 'error',
-      message: 'Falta configurar ADMIN_PASSWORD en las variables de entorno de Render.'
+const STAFF_ROLES = ['administradora', 'cosmetologa'];
+const MASTER_STAFF = { id: 'owner', name: 'Administración', email: '', role: 'administradora', specialistId: '' };
+const SPECIALIST_COLORS = ['#DECBB1', '#E5D4CE', '#D6E1D8', '#DFD8E8', '#D7E1E8', '#F5E8D3'];
+
+function toStaffInfo(staff) {
+  return {
+    id: staff.id,
+    name: staff.name,
+    email: staff.email,
+    role: staff.role,
+    specialistId: staff.specialistId || '',
+    active: staff.active !== false,
+    lastLoginAt: staff.lastLoginAt || null,
+    isMaster: staff.id === 'owner'
+  };
+}
+
+// Verifica la sesión del equipo. Las cuentas desactivadas pierden el acceso de inmediato.
+async function requireAdmin(req, res, next) {
+  const header = req.headers.authorization || '';
+  const data = verifyToken(header.startsWith('Bearer ') ? header.slice(7).trim() : '');
+  const unauthorized = () => res.status(401).json({ status: 'unauthorized', message: 'Sesión no válida o expirada. Inicia sesión de nuevo.' });
+  if (!data || data.role !== 'admin') return unauthorized();
+
+  if (data.sub === 'owner') {
+    req.staff = MASTER_STAFF;
+    return next();
+  }
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ status: 'offline', message: 'El servidor está iniciando. Intenta de nuevo en unos segundos.' });
+  }
+  try {
+    const staff = await StaffAccount.findOne({ id: data.sub, active: true }).lean();
+    if (!staff) return unauthorized();
+    req.staff = staff;
+    next();
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: 'No se pudo verificar la sesión.' });
+  }
+}
+
+function requireStaffManager(req, res, next) {
+  if (req.staff?.role !== 'administradora') {
+    return res.status(403).json({ status: 'error', message: 'Solo una administradora puede gestionar el equipo.' });
+  }
+  next();
+}
+
+function validateStaffPassword(password) {
+  return typeof password === 'string' && password.length >= 8 && password.length <= 128;
+}
+
+// Inicio de sesión del equipo: correo + contraseña, o la contraseña maestra (ADMIN_PASSWORD) sin correo
+app.post('/api/admin/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }), async (req, res) => {
+  const body = req.body || {};
+  const email = cleanText(body.email, 120).toLowerCase();
+  const password = String(body.password || '');
+  const invalid = () => res.status(401).json({ status: 'error', message: 'Correo o contraseña incorrectos.' });
+
+  if (!password) return invalid();
+
+  if (!email || email === 'admin') {
+    if (!ADMIN_PASSWORD) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Falta configurar ADMIN_PASSWORD en las variables de entorno de Render.'
+      });
+    }
+    if (!safeEqualStrings(password, ADMIN_PASSWORD)) return invalid();
+    return res.json({ status: 'ok', token: createToken('admin', 'owner'), staff: toStaffInfo(MASTER_STAFF) });
+  }
+
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ status: 'offline', message: 'El servidor está iniciando. Intenta de nuevo en unos segundos.' });
+  }
+  try {
+    const staff = await StaffAccount.findOne({ email });
+    if (!staff || !verifyPassword(password, staff.passwordHash, staff.passwordSalt)) return invalid();
+    if (!staff.active) {
+      return res.status(403).json({ status: 'error', message: 'Tu acceso está desactivado. Habla con la administradora del estudio.' });
+    }
+    staff.lastLoginAt = new Date();
+    await staff.save();
+    return res.json({ status: 'ok', token: createToken('admin', staff.id), staff: toStaffInfo(staff.toObject()) });
+  } catch (error) {
+    console.error('Error en login del equipo:', error);
+    return res.status(500).json({ status: 'error', message: 'No se pudo iniciar sesión.' });
+  }
+});
+
+app.get('/api/admin/me', requireAdmin, (req, res) => {
+  res.json({ status: 'ok', staff: toStaffInfo(req.staff) });
+});
+
+app.post('/api/admin/me/password', requireAdmin, async (req, res) => {
+  if (req.staff.id === 'owner') {
+    return res.status(400).json({ status: 'error', message: 'La contraseña maestra se cambia en Render (ADMIN_PASSWORD).' });
+  }
+  const { currentPassword, newPassword } = req.body || {};
+  if (!validateStaffPassword(newPassword)) {
+    return res.status(400).json({ status: 'error', message: 'La nueva contraseña debe tener al menos 8 caracteres.' });
+  }
+  try {
+    const staff = await StaffAccount.findOne({ id: req.staff.id });
+    if (!verifyPassword(String(currentPassword || ''), staff.passwordHash, staff.passwordSalt)) {
+      return res.status(400).json({ status: 'error', message: 'La contraseña actual no es correcta.' });
+    }
+    const { hash, salt } = hashPassword(newPassword);
+    staff.passwordHash = hash;
+    staff.passwordSalt = salt;
+    await staff.save();
+    return res.json({ status: 'ok' });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: 'No se pudo cambiar la contraseña.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Gestión del equipo (solo administradoras)
+// ---------------------------------------------------------------------------
+app.get('/api/admin/staff', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+  const staff = await StaffAccount.find({}).sort({ createdAt: 1 }).lean();
+  res.json({ status: 'ok', staff: staff.map(toStaffInfo) });
+});
+
+app.post('/api/admin/staff', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+  const body = req.body || {};
+  const name = cleanText(body.name, 80);
+  const email = cleanText(body.email, 120).toLowerCase();
+  const role = STAFF_ROLES.includes(body.role) ? body.role : 'cosmetologa';
+  const password = String(body.password || '');
+  // specialistMode: 'new' (crear perfil en agenda), 'existing' (vincular), 'none'
+  const specialistMode = ['new', 'existing', 'none'].includes(body.specialistMode) ? body.specialistMode : 'new';
+
+  if (name.length < 3) return res.status(400).json({ status: 'error', message: 'Escribe el nombre completo.' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return res.status(400).json({ status: 'error', message: 'Escribe un correo válido.' });
+  if (!validateStaffPassword(password)) return res.status(400).json({ status: 'error', message: 'La contraseña temporal debe tener al menos 8 caracteres.' });
+
+  try {
+    if (await StaffAccount.exists({ email })) {
+      return res.status(409).json({ status: 'error', message: 'Ya existe una cuenta del equipo con ese correo.' });
+    }
+
+    let specialistId = '';
+    if (specialistMode === 'existing') {
+      specialistId = String(body.specialistId || '');
+      if (!(await Specialist.exists({ id: specialistId }))) {
+        return res.status(400).json({ status: 'error', message: 'Elige un perfil de especialista válido.' });
+      }
+      if (await StaffAccount.exists({ specialistId })) {
+        return res.status(409).json({ status: 'error', message: 'Ese perfil de especialista ya tiene una cuenta asignada.' });
+      }
+    } else if (specialistMode === 'new') {
+      const count = await Specialist.countDocuments();
+      specialistId = `esp-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`;
+      await Specialist.create({
+        id: specialistId,
+        name,
+        role: cleanText(body.specialistRole, 80) || (role === 'administradora' ? 'Cosmetóloga Administradora' : 'Cosmetóloga'),
+        specialty: cleanText(body.specialty, 120),
+        avatarBg: SPECIALIST_COLORS[count % SPECIALIST_COLORS.length],
+        initials: getInitials(name)
+      });
+    }
+
+    const { hash, salt } = hashPassword(password);
+    const staff = await StaffAccount.create({
+      id: `staff-${crypto.randomBytes(8).toString('hex')}`,
+      name,
+      email,
+      role,
+      specialistId,
+      active: true,
+      passwordHash: hash,
+      passwordSalt: salt
     });
+    return res.status(201).json({ status: 'ok', staff: toStaffInfo(staff.toObject()) });
+  } catch (error) {
+    console.error('Error creando cuenta del equipo:', error);
+    if (error.code === 11000) {
+      return res.status(409).json({ status: 'error', message: 'Ya existe una cuenta del equipo con ese correo.' });
+    }
+    return res.status(500).json({ status: 'error', message: 'No se pudo crear la cuenta.' });
   }
-  const { password } = req.body || {};
-  if (!password || !safeEqualStrings(password, ADMIN_PASSWORD)) {
-    return res.status(401).json({ status: 'error', message: 'Contraseña incorrecta.' });
+});
+
+app.patch('/api/admin/staff/:id', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+  const body = req.body || {};
+  try {
+    const staff = await StaffAccount.findOne({ id: req.params.id });
+    if (!staff) return res.status(404).json({ status: 'error', message: 'No se encontró esa cuenta.' });
+
+    const isSelf = staff.id === req.staff.id;
+    if (typeof body.active === 'boolean') {
+      if (isSelf && !body.active) return res.status(400).json({ status: 'error', message: 'No puedes desactivar tu propia cuenta.' });
+      staff.active = body.active;
+    }
+    if (body.role !== undefined) {
+      if (!STAFF_ROLES.includes(body.role)) return res.status(400).json({ status: 'error', message: 'Rol no válido.' });
+      if (isSelf && body.role !== 'administradora') return res.status(400).json({ status: 'error', message: 'No puedes quitarte el rol de administradora.' });
+      staff.role = body.role;
+    }
+    if (body.name !== undefined) {
+      const name = cleanText(body.name, 80);
+      if (name.length < 3) return res.status(400).json({ status: 'error', message: 'Escribe el nombre completo.' });
+      staff.name = name;
+    }
+    if (body.password !== undefined) {
+      if (!validateStaffPassword(body.password)) return res.status(400).json({ status: 'error', message: 'La contraseña temporal debe tener al menos 8 caracteres.' });
+      const { hash, salt } = hashPassword(body.password);
+      staff.passwordHash = hash;
+      staff.passwordSalt = salt;
+    }
+    await staff.save();
+    return res.json({ status: 'ok', staff: toStaffInfo(staff.toObject()) });
+  } catch (error) {
+    console.error('Error actualizando cuenta del equipo:', error);
+    return res.status(500).json({ status: 'error', message: 'No se pudo actualizar la cuenta.' });
   }
-  return res.json({ status: 'ok', token: createToken('admin', 'admin') });
 });
 
 // Obtener todo el estado del estudio (solo administradora)
-app.get('/api/state', requireRole('admin'), requireMongo, async (req, res) => {
+app.get('/api/state', requireAdmin, requireMongo, async (req, res) => {
   try {
     const [patients, appointments, inventory, finances, treatments, specialists] = await Promise.all([
       Patient.find({}).sort({ createdAt: -1 }).lean(),
@@ -279,7 +488,7 @@ app.get('/api/state', requireRole('admin'), requireMongo, async (req, res) => {
 });
 
 // Sincronizar y guardar cambios del panel en MongoDB (solo administradora)
-app.post('/api/state', requireRole('admin'), requireMongo, async (req, res) => {
+app.post('/api/state', requireAdmin, requireMongo, async (req, res) => {
   const { state } = req.body || {};
   if (!state) {
     return res.status(400).json({ status: 'error', message: 'Falta el objeto state en el cuerpo de la petición.' });

@@ -128,6 +128,19 @@ const ClientAccountSchema = new mongoose.Schema({
   lastLoginAt: { type: Date }
 }, { timestamps: true });
 
+// 8. Cuentas del equipo (administradoras y cosmetólogas) para entrar al panel
+const StaffAccountSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  role: { type: String, enum: ['administradora', 'cosmetologa'], default: 'cosmetologa' },
+  specialistId: { type: String, default: '' },
+  active: { type: Boolean, default: true },
+  passwordHash: { type: String, required: true },
+  passwordSalt: { type: String, required: true },
+  lastLoginAt: { type: Date }
+}, { timestamps: true });
+
 module.exports = {
   Patient: mongoose.model('Patient', PatientSchema),
   Appointment: mongoose.model('Appointment', AppointmentSchema),
@@ -135,5 +148,6 @@ module.exports = {
   Finance: mongoose.model('Finance', FinanceSchema),
   Treatment: mongoose.model('Treatment', TreatmentSchema),
   Specialist: mongoose.model('Specialist', SpecialistSchema),
-  ClientAccount: mongoose.model('ClientAccount', ClientAccountSchema)
+  ClientAccount: mongoose.model('ClientAccount', ClientAccountSchema),
+  StaffAccount: mongoose.model('StaffAccount', StaffAccountSchema)
 };
