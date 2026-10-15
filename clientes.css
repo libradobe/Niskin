@@ -644,6 +644,87 @@
   gap: 12px;
 }
 
+.cp-appt-buttons {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cp-wa-soft {
+  color: #1E7A45;
+  border-color: #BFE3CC;
+  background: #EEF8F1;
+}
+
+.cp-wa-btn {
+  margin-top: 10px;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  background: #25D366;
+  color: #FFFFFF;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.cp-help-link {
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #1E7A45;
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: center;
+}
+
+.cp-deposit {
+  background: var(--bg-subtle);
+  border: 1px dashed var(--gold-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.84rem;
+}
+
+.cp-policy {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.cp-hint a {
+  color: #1E7A45;
+  font-weight: 600;
+}
+
+.cp-push {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: linear-gradient(135deg, #FBF6EC 0%, #F3EADB 100%);
+  border: 1px solid var(--gold-border);
+  border-radius: 18px;
+  padding: 14px 16px;
+}
+
+.cp-push strong {
+  font-size: 0.95rem;
+}
+
+.cp-push p {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.cp-push-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* Mi piel */
 .cp-muted {
   font-size: 0.8rem;

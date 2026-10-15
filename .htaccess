@@ -15,6 +15,9 @@ Options -Indexes
   RewriteRule ^(clientes|registro|citas)$ clientes.html [L]
 </IfModule>
 
+# Manifiestos de la app instalable (notificaciones en iPhone requieren instalarla)
+AddType application/manifest+json .webmanifest
+
 # Evitar que el navegador o la CDN de Hostinger muestren versiones viejas de la app.
 # El HTML siempre se revalida; CSS/JS llevan ?v=... en index.html y clientes.html.
 <IfModule mod_headers.c>
@@ -24,7 +27,7 @@ Options -Indexes
   <FilesMatch "\.(css|js)$">
     Header set Cache-Control "public, max-age=3600, must-revalidate"
   </FilesMatch>
-  <FilesMatch "^config\.js$">
+  <FilesMatch "^(config|sw)\.js$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
   Header always set X-Content-Type-Options "nosniff"

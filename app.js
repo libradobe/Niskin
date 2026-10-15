@@ -119,6 +119,8 @@ async function syncFromCloudServer() {
       if (payload && payload.status === 'ok') {
         uiState.serverSynced = true;
         uiState.backendLabel = 'Conectado a Render + MongoDB';
+        // No pisar la configuración mientras se está editando
+        if (payload.settings && uiState.currentView !== 'settings') uiState.settings = payload.settings;
         if (payload.hasServerData && payload.data) {
           state = payload.data;
           try {
@@ -140,6 +142,8 @@ async function syncFromCloudServer() {
 }
 
 function openRenderConfigModal() {
+  // Solo administradoras (o desde la pantalla de acceso si no hay conexión)
+  if (getAdminToken() && !isStaffManager()) return;
   const currentUrl = getRenderBaseUrl();
   openModalWithHTML(
     'Conexión Hostinger (Frontend) ↔ Render + MongoDB (Backend)',
@@ -252,13 +256,17 @@ async function submitAdminLogin(event) {
     input.value = '';
     hideAdminGate();
     switchView(uiState.currentView || 'dashboard');
+    refreshPushStatus();
     await syncFromCloudServer();
     showToast(`Bienvenida, ${nameWithoutTitles(data.staff?.name || 'equipo Niskin')[0]}.`);
   } catch (err) {
-    msg.textContent = err.message === 'Failed to fetch'
+    const isNetworkError = err instanceof TypeError || err.message === 'Failed to fetch';
+    msg.textContent = isNetworkError
       ? 'No se pudo conectar con el servidor. Revisa tu conexión o la URL del servidor.'
       : err.message;
     msg.hidden = false;
+    const configBtn = document.getElementById('adminGateConfigBtn');
+    if (configBtn && isNetworkError) configBtn.hidden = false;
   } finally {
     clearTimeout(slowTimer);
     button.disabled = false;
@@ -318,7 +326,7 @@ function applyStaffToUI() {
   document.querySelectorAll('.manager-only').forEach(el => {
     el.hidden = !isStaffManager();
   });
-  if (uiState.currentView === 'team' && !isStaffManager()) switchView('dashboard');
+  if ((uiState.currentView === 'team' || uiState.currentView === 'settings') && !isStaffManager()) switchView('dashboard');
 }
 
 async function refreshCurrentStaff() {
@@ -381,6 +389,12 @@ function openMyAccountModal() {
           <h4 style="font-size:1rem;">${escapeHTML(staff.name || 'Equipo Niskin')}</h4>
           <p style="font-size:0.82rem;color:var(--text-secondary);">${isMaster ? 'Acceso con contraseña maestra' : `${escapeHTML(STAFF_ROLE_LABELS[staff.role] || '')} • ${escapeHTML(staff.email || '')}`}</p>
         </div>
+      </div>
+      <div id="pushStatusBox" class="push-account-box">
+        <h4 style="font-size:0.92rem;">Notificaciones en este dispositivo</h4>
+        <p style="font-size:0.82rem;color:var(--text-secondary);">${escapeHTML(pushStatusText(uiState.pushStatus))}</p>
+        ${uiState.pushStatus === 'available' ? '<button type="button" class="btn-gold btn-sm" onclick="enableStaffPush()">🔔 Activar notificaciones</button>' : ''}
+        ${uiState.pushStatus === 'enabled' ? '<button type="button" class="btn-soft btn-sm" onclick="disableStaffPush()">Desactivar en este dispositivo</button>' : ''}
       </div>
       ${isMaster ? `
         <p class="form-message success">Estás usando la contraseña maestra. Para mayor seguridad, crea tu propia cuenta de administradora en <strong>Equipo y Accesos</strong> y úsala a diario.</p>
@@ -699,7 +713,467 @@ async function saveStaffPassword(staffId) {
   }
 }
 
+// ============================================================================
+// WHATSAPP (wa.me)
+// ============================================================================
+function studioSettings() {
+  return uiState.settings || {};
+}
+
+function formatDateLong(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  const text = new Date(y, m - 1, d).toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' });
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function buildAppointmentWhatsApp(app, patient) {
+  const st = studioSettings();
+  const business = st.businessName || 'Niskin Beauty Studio';
+  const firstName = nameWithoutTitles(patient?.name || app.patientName)[0] || '';
+  const when = `${formatDateLong(app.date)} a las ${app.time}`;
+  const treatment = state.treatments.find(t => t.id === app.treatmentId);
+
+  if (app.status === 'Pendiente Depósito') {
+    const deposit = treatment ? formatMoney(treatment.depositRequired) : 'el depósito';
+    return [
+      `Hola ${firstName} 👋, te escribimos de ${business}.`,
+      `Recibimos tu reserva de *${app.treatmentName}* para el *${when}* con ${app.specialistName}.`,
+      `Para confirmarla, realiza el depósito de *${deposit}*${st.depositInstructions ? `:\n${st.depositInstructions}` : '.'}`,
+      'Cuando lo hagas, envíanos el comprobante por aquí. ¡Gracias! ✨'
+    ].join('\n\n');
+  }
+  if (app.status === 'Confirmada') {
+    return [
+      `Hola ${firstName} ✨, te recordamos tu cita en ${business}:`,
+      `*${app.treatmentName}*\n📅 ${when}\n👩‍⚕️ ${app.specialistName}${st.address ? `\n📍 ${st.address}` : ''}`,
+      '¡Te esperamos! Si necesitas reprogramar, responde a este mensaje.'
+    ].join('\n\n');
+  }
+  if (app.status === 'Cancelada') {
+    return `Hola ${firstName}, tu cita de *${app.treatmentName}* del ${when} quedó cancelada. Si quieres reprogramarla, respóndenos por aquí y buscamos otro horario. 💛`;
+  }
+  return `Hola ${firstName}, gracias por visitarnos en ${business} 💛. ¿Cómo sentiste tu piel después de tu sesión de *${app.treatmentName}*? Cualquier duda, escríbenos.`;
+}
+
+function sendAppointmentWhatsApp(appointmentId) {
+  const app = state.appointments.find(a => a.id === appointmentId);
+  if (!app) return;
+  const patient = state.patients.find(p => p.id === app.patientId);
+  if (!patient?.phone) {
+    showToast('Esta clienta no tiene teléfono registrado. Se abrirá WhatsApp para elegir el contacto.');
+  }
+  NiskinWhatsApp.open(patient?.phone, buildAppointmentWhatsApp(app, patient));
+}
+
+function sendPatientWhatsApp(patientId) {
+  const patient = state.patients.find(p => p.id === patientId);
+  if (!patient) return;
+  const st = studioSettings();
+  NiskinWhatsApp.open(patient.phone, `Hola ${nameWithoutTitles(patient.name)[0]} 👋, te escribimos de ${st.businessName || 'Niskin Beauty Studio'}.`);
+}
+
+// ============================================================================
+// ELIMINAR CLIENTAS, CITAS Y TRATAMIENTOS
+// ============================================================================
+function canDelete(kind) {
+  return kind === 'appointment' ? Boolean(getAdminToken()) : isStaffManager();
+}
+
+function persistLocalState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {}
+}
+
+function askDelete(kind, id) {
+  if (!canDelete(kind)) {
+    showToast('Solo una administradora puede eliminar esto.');
+    return;
+  }
+  let title = '';
+  let detail = '';
+  if (kind === 'appointment') {
+    const a = state.appointments.find(x => x.id === id);
+    if (!a) return;
+    title = 'Eliminar cita';
+    detail = `Se eliminará la cita de <strong>${escapeHTML(a.patientName)}</strong> (${escapeHTML(a.treatmentName)}, ${escapeHTML(a.date)} ${escapeHTML(a.time)}).${ACTIVE_APPOINTMENT_STATUSES.includes(a.status) ? ' Si la clienta tiene notificaciones activas, se le avisará que fue cancelada.' : ''} Los movimientos de Finanzas no se borran.`;
+  } else if (kind === 'patient') {
+    const p = state.patients.find(x => x.id === id);
+    if (!p) return;
+    const count = state.appointments.filter(a => a.patientId === id).length;
+    title = 'Eliminar clienta';
+    detail = `Se eliminará el expediente de <strong>${escapeHTML(p.name)}</strong>, sus fotos, sesiones y ${count} cita(s). Si tiene cuenta en la página de clientas, ya no podrá entrar. Los movimientos de Finanzas no se borran.`;
+  } else if (kind === 'treatment') {
+    const t = state.treatments.find(x => x.id === id);
+    if (!t) return;
+    title = 'Eliminar tratamiento';
+    detail = `<strong>${escapeHTML(t.name)}</strong> dejará de aparecer en la agenda y en las reservas online. Las citas existentes conservan su nombre.`;
+  }
+  uiState.pendingDelete = { kind, id };
+  openModalWithHTML(
+    title,
+    `
+      <p style="font-size:0.9rem;">${detail}</p>
+      <p class="form-message">Esta acción no se puede deshacer.</p>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-danger" id="confirmDeleteBtn" onclick="performDelete()">Eliminar</button>
+    `
+  );
+}
+
+const ACTIVE_APPOINTMENT_STATUSES = ['Confirmada', 'Pendiente Depósito'];
+
+async function performDelete() {
+  const pending = uiState.pendingDelete;
+  if (!pending) return;
+  const btn = document.getElementById('confirmDeleteBtn');
+  if (btn) btn.disabled = true;
+  const paths = {
+    appointment: '/api/admin/appointments/',
+    patient: '/api/admin/patients/',
+    treatment: '/api/admin/treatments/'
+  };
+  try {
+    await adminApi(`${paths[pending.kind]}${encodeURIComponent(pending.id)}`, { method: 'DELETE' });
+    if (pending.kind === 'appointment') {
+      state.appointments = state.appointments.filter(a => a.id !== pending.id);
+      showToast('Cita eliminada.');
+    } else if (pending.kind === 'patient') {
+      state.patients = state.patients.filter(p => p.id !== pending.id);
+      state.appointments = state.appointments.filter(a => a.patientId !== pending.id);
+      if (uiState.selectedPatientId === pending.id) uiState.selectedPatientId = state.patients[0]?.id || '';
+      if (uiState.portalClientId === pending.id) uiState.portalClientId = state.patients[0]?.id || '';
+      showToast('Clienta eliminada.');
+    } else if (pending.kind === 'treatment') {
+      state.treatments = state.treatments.filter(t => t.id !== pending.id);
+      showToast('Tratamiento eliminado.');
+    }
+    uiState.pendingDelete = null;
+    persistLocalState();
+    closeModal();
+    renderWorkspace();
+  } catch (err) {
+    showToast(err.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ============================================================================
+// CONFIGURACIÓN DEL NEGOCIO (solo administradoras)
+// ============================================================================
+const WEEKDAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+async function loadSettings() {
+  try {
+    const data = await adminApi('/api/admin/settings');
+    uiState.settings = data.settings;
+  } catch (err) {
+    uiState.settingsError = err.message;
+  }
+  if (uiState.currentView === 'settings') renderWorkspace();
+}
+
+function timeInputToSlot(value) {
+  const [h, m] = String(value || '').split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+function slotMinutes(slot) {
+  const m = /^(\d{2}):(\d{2}) (AM|PM)$/.exec(slot || '');
+  if (!m) return 0;
+  return ((Number(m[1]) % 12) + (m[3] === 'PM' ? 12 : 0)) * 60 + Number(m[2]);
+}
+
+function renderSettingsView() {
+  if (!isStaffManager()) {
+    return `<div class="surface-card" style="padding:28px;">Solo una administradora puede cambiar la configuración del negocio.</div>`;
+  }
+  if (!uiState.settings) {
+    if (!uiState.settingsLoading) {
+      uiState.settingsLoading = true;
+      loadSettings().finally(() => { uiState.settingsLoading = false; });
+    }
+    return `<div class="surface-card" style="padding:28px;color:var(--text-secondary);">Cargando configuración…</div>`;
+  }
+  const st = uiState.settings;
+  if (!uiState.settingsDraftSlots) uiState.settingsDraftSlots = [...(st.slots || [])];
+  const slots = uiState.settingsDraftSlots;
+  const clientUrl = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, '')}clientes.html`;
+
+  return `
+    <form class="settings-grid" onsubmit="saveSettings(event)">
+      <section class="surface-card settings-card">
+        <h2>Tu negocio</h2>
+        <p class="settings-help">Así aparece tu estudio en la página de clientas y en los mensajes.</p>
+        <div class="form-group">
+          <label for="sBusinessName">Nombre del negocio</label>
+          <input id="sBusinessName" class="form-control" maxlength="80" value="${escapeHTML(st.businessName)}" required>
+        </div>
+        <div class="form-group">
+          <label for="sTagline">Frase corta</label>
+          <input id="sTagline" class="form-control" maxlength="120" value="${escapeHTML(st.tagline)}" placeholder="Ej. Cosmetología clínica y cuidado facial">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="sCity">Ciudad</label>
+            <input id="sCity" class="form-control" maxlength="80" value="${escapeHTML(st.city)}">
+          </div>
+          <div class="form-group">
+            <label for="sInstagram">Instagram</label>
+            <input id="sInstagram" class="form-control" maxlength="60" value="${escapeHTML(st.instagram)}" placeholder="@niskinbeauty">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="sAddress">Dirección</label>
+          <input id="sAddress" class="form-control" maxlength="160" value="${escapeHTML(st.address)}" placeholder="Calle, número, sector">
+        </div>
+        <div class="form-group">
+          <label for="sWelcome">Mensaje de bienvenida en la página de clientas</label>
+          <textarea id="sWelcome" class="form-control" rows="2" maxlength="600" placeholder="Ej. Agenda tu cita en minutos y recibe la confirmación por WhatsApp.">${escapeHTML(st.welcomeMessage)}</textarea>
+        </div>
+      </section>
+
+      <section class="surface-card settings-card">
+        <h2>WhatsApp y pagos</h2>
+        <p class="settings-help">Las clientas usarán este número para enviarte el comprobante del depósito.</p>
+        <div class="form-group">
+          <label for="sWhatsapp">WhatsApp del estudio</label>
+          <input id="sWhatsapp" class="form-control" type="tel" inputmode="tel" maxlength="20" value="${escapeHTML(st.whatsapp)}" placeholder="809-555-0123">
+        </div>
+        <div class="form-group">
+          <label for="sDeposit">Datos para el depósito</label>
+          <textarea id="sDeposit" class="form-control" rows="4" maxlength="600" placeholder="Banco Popular — Cuenta de ahorros 000000000 — A nombre de ...">${escapeHTML(st.depositInstructions)}</textarea>
+        </div>
+        <div class="form-group">
+          <label for="sPolicy">Política de cancelación</label>
+          <textarea id="sPolicy" class="form-control" rows="3" maxlength="600" placeholder="Ej. Cancela con al menos 24 horas para conservar tu depósito.">${escapeHTML(st.cancellationPolicy)}</textarea>
+        </div>
+      </section>
+
+      <section class="surface-card settings-card">
+        <h2>Reservas en línea</h2>
+        <label class="settings-switch">
+          <input type="checkbox" id="sBookingEnabled" ${st.bookingEnabled ? 'checked' : ''}>
+          <span>Permitir que las clientas reserven desde la página</span>
+        </label>
+        <div class="form-group">
+          <label>Días de atención</label>
+          <div class="settings-days">
+            ${[1, 2, 3, 4, 5, 6, 0].map(d => `
+              <label class="settings-day">
+                <input type="checkbox" name="sOpenDay" value="${d}" ${(st.closedWeekdays || []).includes(d) ? '' : 'checked'}>
+                <span>${WEEKDAY_LABELS[d].slice(0, 3)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Horarios que se ofrecen</label>
+          <div class="settings-slots">
+            ${slots.map((slot, i) => `
+              <span class="settings-slot">${escapeHTML(slot)}
+                <button type="button" onclick="removeSettingsSlot(${i})" aria-label="Quitar ${escapeHTML(slot)}">×</button>
+              </span>
+            `).join('')}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <input id="sNewSlot" type="time" class="form-control" style="flex:1;min-width:0;" step="900">
+            <button type="button" class="btn-soft btn-sm" onclick="addSettingsSlot()">＋ Agregar</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="sMinHours">Anticipación mínima (horas)</label>
+            <input id="sMinHours" type="number" min="0" max="72" class="form-control" value="${escapeHTML(st.minHoursNotice)}">
+          </div>
+          <div class="form-group">
+            <label for="sMaxDays">Reservar hasta (días)</label>
+            <input id="sMaxDays" type="number" min="1" max="365" class="form-control" value="${escapeHTML(st.maxDaysAhead)}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="sMaxActive">Máximo de citas activas por clienta</label>
+          <input id="sMaxActive" type="number" min="1" max="20" class="form-control" value="${escapeHTML(st.maxActiveBookings)}">
+        </div>
+        <p class="settings-help">Enlace para tus clientas: <a href="${escapeHTML(clientUrl)}" target="_blank" rel="noopener">${escapeHTML(clientUrl)}</a></p>
+      </section>
+
+      <section class="surface-card settings-card">
+        <h2>Recordatorios</h2>
+        <label class="settings-switch">
+          <input type="checkbox" id="sReminders" ${st.remindersEnabled ? 'checked' : ''}>
+          <span>Enviar recordatorio push a la clienta antes de su cita confirmada</span>
+        </label>
+        <div class="form-group">
+          <label for="sReminderHours">¿Cuántas horas antes?</label>
+          <input id="sReminderHours" type="number" min="1" max="72" class="form-control" value="${escapeHTML(st.reminderHoursBefore)}">
+        </div>
+        <p class="settings-help">Solo llega a clientas que activaron las notificaciones en la página de reservas.</p>
+      </section>
+
+      <div class="settings-actions">
+        <p id="settingsMsg" class="form-message" hidden></p>
+        <button type="submit" class="btn-gold" id="settingsSaveBtn">Guardar configuración</button>
+      </div>
+    </form>
+  `;
+}
+
+function addSettingsSlot() {
+  const slot = timeInputToSlot(document.getElementById('sNewSlot').value);
+  if (!slot) return showToast('Elige una hora.');
+  const slots = uiState.settingsDraftSlots || [];
+  if (!slots.includes(slot)) slots.push(slot);
+  slots.sort((a, b) => slotMinutes(a) - slotMinutes(b));
+  uiState.settingsDraftSlots = slots;
+  rerenderSettingsKeepingValues();
+}
+
+function removeSettingsSlot(index) {
+  uiState.settingsDraftSlots.splice(index, 1);
+  rerenderSettingsKeepingValues();
+}
+
+// Re-dibuja la vista sin perder lo que la usuaria ya escribió
+function rerenderSettingsKeepingValues() {
+  uiState.settings = { ...uiState.settings, ...collectSettingsForm() };
+  renderWorkspace();
+}
+
+function collectSettingsForm() {
+  const val = id => document.getElementById(id)?.value ?? '';
+  const openDays = [...document.querySelectorAll('input[name="sOpenDay"]:checked')].map(i => Number(i.value));
+  return {
+    businessName: val('sBusinessName').trim(),
+    tagline: val('sTagline').trim(),
+    city: val('sCity').trim(),
+    instagram: val('sInstagram').trim(),
+    address: val('sAddress').trim(),
+    welcomeMessage: val('sWelcome'),
+    whatsapp: val('sWhatsapp').trim(),
+    depositInstructions: val('sDeposit'),
+    cancellationPolicy: val('sPolicy'),
+    bookingEnabled: document.getElementById('sBookingEnabled')?.checked ?? true,
+    closedWeekdays: [0, 1, 2, 3, 4, 5, 6].filter(d => !openDays.includes(d)),
+    minHoursNotice: Number(val('sMinHours')),
+    maxDaysAhead: Number(val('sMaxDays')),
+    maxActiveBookings: Number(val('sMaxActive')),
+    remindersEnabled: document.getElementById('sReminders')?.checked ?? true,
+    reminderHoursBefore: Number(val('sReminderHours'))
+  };
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const msg = document.getElementById('settingsMsg');
+  const btn = document.getElementById('settingsSaveBtn');
+  const body = { ...collectSettingsForm(), slots: uiState.settingsDraftSlots || [] };
+  btn.disabled = true;
+  try {
+    const data = await adminApi('/api/admin/settings', { method: 'PUT', body });
+    uiState.settings = data.settings;
+    uiState.settingsDraftSlots = [...data.settings.slots];
+    showToast('Configuración guardada.');
+    renderWorkspace();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.hidden = false;
+    btn.disabled = false;
+  }
+}
+
+// ============================================================================
+// NOTIFICACIONES PUSH DEL EQUIPO
+// ============================================================================
+const PUSH_PROMPT_KEY = 'niskin_staff_push_prompt_dismissed';
+
+async function enableStaffPush() {
+  try {
+    await NiskinPush.enable({
+      apiBase: getRenderBaseUrl(),
+      subscribePath: '/api/admin/push/subscribe',
+      headers: authHeaders()
+    });
+    showToast('Notificaciones activadas en este dispositivo. 🔔');
+  } catch (err) {
+    showToast(err.message);
+  }
+  uiState.pushStatus = await NiskinPush.status();
+  if (document.getElementById('modalBackdrop')?.classList.contains('open') && document.getElementById('pushStatusBox')) {
+    openMyAccountModal();
+  } else {
+    renderWorkspace();
+  }
+}
+
+async function disableStaffPush() {
+  await NiskinPush.disable({ apiBase: getRenderBaseUrl() });
+  uiState.pushStatus = await NiskinPush.status();
+  showToast('Notificaciones desactivadas en este dispositivo.');
+  openMyAccountModal();
+}
+
+function dismissPushPrompt() {
+  try {
+    localStorage.setItem(PUSH_PROMPT_KEY, '1');
+  } catch (e) {}
+  renderWorkspace();
+}
+
+function pushStatusText(status) {
+  return {
+    enabled: '🔔 Activadas en este dispositivo.',
+    available: 'Recibe un aviso cuando una clienta reserve, cancele o se registre.',
+    denied: 'Bloqueaste las notificaciones. Actívalas en los ajustes del navegador para este sitio.',
+    'ios-install': 'En iPhone: toca Compartir → “Añadir a pantalla de inicio”, abre Niskin desde ahí y actívalas.',
+    unsupported: 'Este navegador no permite notificaciones.'
+  }[status] || '';
+}
+
+function renderPushPromptCard() {
+  let dismissed = false;
+  try {
+    dismissed = localStorage.getItem(PUSH_PROMPT_KEY) === '1';
+  } catch (e) {}
+  if (dismissed) return '';
+  if (uiState.pushStatus === 'ios-install') {
+    return `
+      <div class="push-prompt">
+        <div>
+          <strong>🔔 Recibe avisos de nuevas citas</strong>
+          <p>En iPhone toca <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>, abre Niskin desde ahí y activa las notificaciones en <b>Mi cuenta</b>.</p>
+        </div>
+        <div class="push-prompt-actions">
+          <button class="btn-soft btn-sm" onclick="dismissPushPrompt()">Entendido</button>
+        </div>
+      </div>
+    `;
+  }
+  if (uiState.pushStatus !== 'available') return '';
+  return `
+    <div class="push-prompt">
+      <div>
+        <strong>🔔 Activa las notificaciones</strong>
+        <p>Entérate al instante cuando una clienta reserve, cancele o se registre.</p>
+      </div>
+      <div class="push-prompt-actions">
+        <button class="btn-soft btn-sm" onclick="dismissPushPrompt()">Ahora no</button>
+        <button class="btn-gold btn-sm" onclick="enableStaffPush()">Activar</button>
+      </div>
+    </div>
+  `;
+}
+
 function adminLogout() {
+  // En un dispositivo compartido, dejar de recibir avisos del estudio al cerrar sesión
+  if (window.NiskinPush) NiskinPush.disable({ apiBase: getRenderBaseUrl() });
+  uiState.settings = null;
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (e) {}
@@ -781,7 +1255,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 function switchView(viewName) {
-  if (viewName === 'team' && !isStaffManager()) viewName = 'dashboard';
+  if ((viewName === 'team' || viewName === 'settings') && !isStaffManager()) viewName = 'dashboard';
+  if (viewName === 'settings' && uiState.currentView !== 'settings') uiState.settingsDraftSlots = null;
   const viewChanged = uiState.currentView !== viewName;
   uiState.currentView = viewName;
   toggleMobileMenu(false);
@@ -800,6 +1275,7 @@ function switchView(viewName) {
     'inventory': ['Inventario de Cabina y Skincare Retail', 'Control de existencias, alertas de stock mínimo y descuento automático por sesión'],
     'treatments': ['Catálogo de Tratamientos y Protocolos', 'Servicios de Niskin Beauty Studio e insumos vinculados por sesión'],
     'finances': ['Finanzas y Flujo de Caja', 'Registro de ingresos por tratamientos, depósitos, ventas de skincare y gastos operativos'],
+    'settings': ['Configuración del Negocio', 'Datos del estudio, WhatsApp, pagos, horarios de reserva y recordatorios'],
     'team': ['Equipo y Accesos', 'Cuentas de administradoras y cosmetólogas que pueden entrar al panel'],
     'client-portal': ['Portal del Cliente — Mi Espacio Niskin', 'Experiencia interactiva para tus clientas: agendar citas, ver su récord y fotos de mejoría']
   };
@@ -838,6 +1314,9 @@ function renderWorkspace() {
       break;
     case 'team':
       container.innerHTML = renderTeamView();
+      break;
+    case 'settings':
+      container.innerHTML = renderSettingsView();
       break;
     case 'client-portal':
       container.innerHTML = renderClientPortalView();
@@ -880,11 +1359,12 @@ function renderDashboardView() {
   });
 
   return `
+    ${renderPushPromptCard()}
     <div class="action-bar">
       <div>
         <span style="font-size:0.85rem;color:var(--text-secondary);">
           Fecha seleccionada en agenda: <strong>${uiState.selectedDate}</strong> • ${todayAppointments.length} cita(s) en ese día
-          ${uiState.serverSynced
+          ${!isStaffManager() ? '' : uiState.serverSynced
             ? ` • <span style="color:var(--status-success-text);font-weight:600;">☁️ ${uiState.backendLabel}</span>`
             : ` • <span style="color:var(--text-muted);cursor:pointer;text-decoration:underline;" onclick="openRenderConfigModal()">☁️ Destino API: ${getRenderBaseUrl()}</span>`}
         </span>
@@ -1046,6 +1526,9 @@ function renderAppointmentRow(app) {
         <button class="round-action-btn" title="Ver Expediente y Fotos de Mejoría" onclick="openPatientRecord('${app.patientId}')">
           📋
         </button>
+        <button class="round-action-btn whatsapp-btn" title="Enviar mensaje por WhatsApp" aria-label="WhatsApp" onclick="sendAppointmentWhatsApp('${app.id}')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>
+        </button>
         ${app.status === 'Pendiente Depósito' ? `
           <button class="round-action-btn" title="Confirmar depósito recibido" onclick="confirmAppointmentDeposit('${app.id}')">
             💳
@@ -1056,6 +1539,9 @@ function renderAppointmentRow(app) {
             ✓
           </button>
         ` : ''}
+        <button class="round-action-btn danger-btn" title="Eliminar cita" aria-label="Eliminar cita" onclick="askDelete('appointment', '${app.id}')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+        </button>
       </div>
     </div>
   `;
@@ -1334,6 +1820,8 @@ function renderPatientsView() {
             <button class="btn-gold btn-sm" onclick="openNewSessionModal('${p.id}')">
               ＋ Registrar Sesión en Cabina
             </button>
+            <button class="btn-soft btn-sm whatsapp-soft" onclick="sendPatientWhatsApp('${p.id}')">WhatsApp</button>
+            ${isStaffManager() ? `<button class="btn-soft btn-sm danger-soft" onclick="askDelete('patient', '${p.id}')">Eliminar clienta</button>` : ''}
           </div>
         </div>
 
@@ -1665,7 +2153,10 @@ function renderTreatmentsView() {
               <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);">${formatMoney(t.price)}</div>
               <div style="font-size:0.76rem;color:var(--gold-hover);">Depósito reserva: ${formatMoney(t.depositRequired)}</div>
             </div>
-            <button class="btn-soft btn-sm" onclick="openAppointmentModal('${t.id}')">Agendar</button>
+            <div style="display:flex;gap:6px;">
+              ${isStaffManager() ? `<button class="btn-soft btn-sm danger-soft" onclick="askDelete('treatment', '${t.id}')" aria-label="Eliminar ${escapeHTML(t.name)}">Eliminar</button>` : ''}
+              <button class="btn-soft btn-sm" onclick="openAppointmentModal('${t.id}')">Agendar</button>
+            </div>
           </div>
         </div>
       `).join('')}
@@ -2659,11 +3150,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const params = new URLSearchParams(window.location.search);
   const requestedView = params.get('vista');
+  const viewAliases = { agenda: 'agenda', inventario: 'inventory', expedientes: 'patients', configuracion: 'settings', equipo: 'team' };
   if (requestedView === 'cliente' || window.location.hash === '#cliente') {
     switchView('client-portal');
   } else {
-    switchView('dashboard');
+    switchView(viewAliases[requestedView] || 'dashboard');
   }
+  refreshPushStatus();
 
   applyStaffToUI();
   refreshCurrentStaff();
@@ -2671,6 +3164,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Sincroniza automáticamente el Frontend en Hostinger con el Backend en Render + MongoDB
   syncFromCloudServer();
 });
+
+async function refreshPushStatus() {
+  if (!window.NiskinPush) return;
+  uiState.pushStatus = await NiskinPush.status();
+  if (uiState.currentView === 'dashboard') renderWorkspace();
+}
 
 // Trae citas nuevas de clientas al volver a la pestaña y cada 2 minutos
 document.addEventListener('visibilitychange', () => {

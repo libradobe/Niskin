@@ -10,12 +10,15 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Niskin">
+  <link rel="manifest" href="manifest-clientes.webmanifest">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <title>Agenda tu cita — Niskin Beauty Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261014d">
-  <link rel="stylesheet" href="clientes.css?v=20261014d">
+  <link rel="stylesheet" href="styles.css?v=20261015a">
+  <link rel="stylesheet" href="clientes.css?v=20261015a">
 </head>
 <body class="client-page">
   <header class="cp-header">
@@ -28,9 +31,9 @@
   <!-- ACCESO: REGISTRO / INICIO DE SESIÓN -->
   <main id="authView" class="cp-main" hidden>
     <section class="cp-hero">
-      <p class="cp-eyebrow">Mi Espacio Niskin</p>
+      <p class="cp-eyebrow" id="cpHeroEyebrow">Mi Espacio Niskin</p>
       <h1>Agenda tu cita en minutos</h1>
-      <p>Crea tu cuenta para reservar tratamientos, ver tus citas y seguir la evolución de tu piel. Tus datos son privados: solo tú y el equipo del estudio pueden verlos.</p>
+      <p id="cpWelcome">Crea tu cuenta para reservar tratamientos, ver tus citas y seguir la evolución de tu piel. Tus datos son privados: solo tú y el equipo del estudio pueden verlos.</p>
     </section>
 
     <div class="cp-segment" role="tablist">
@@ -100,7 +103,7 @@
       </div>
       <p id="loginMessage" class="form-message" role="alert" hidden></p>
       <button type="submit" class="btn-gold btn-block cp-submit">Entrar</button>
-      <p class="cp-hint">¿Olvidaste tu contraseña? Escríbenos por WhatsApp y te ayudamos.</p>
+      <p class="cp-hint" id="cpForgotHelp">¿Olvidaste tu contraseña? Escríbenos y te ayudamos.</p>
     </form>
   </main>
 
@@ -140,8 +143,9 @@
 
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="theme-guard.js?v=20261014d"></script>
-  <script src="config.js?v=20261014d"></script>
-  <script src="clientes.js?v=20261014d"></script>
+  <script src="theme-guard.js?v=20261015a"></script>
+  <script src="config.js?v=20261015a"></script>
+  <script src="notificaciones.js?v=20261015a"></script>
+  <script src="clientes.js?v=20261015a"></script>
 </body>
 </html>

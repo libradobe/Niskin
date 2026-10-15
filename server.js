@@ -13,8 +13,12 @@ const {
   Treatment,
   Specialist,
   ClientAccount,
-  StaffAccount
+  StaffAccount,
+  StudioSettings,
+  DeletedRecord
 } = require('./models/StudioData');
+
+const notify = require('./notify');
 
 const {
   createToken,
@@ -32,11 +36,8 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const STUDIO_TIMEZONE = 'America/Santo_Domingo';
 
-// Horarios que se ofrecen a las clientas en la reserva online
-const STUDIO_SLOTS = ['09:00 AM', '10:00 AM', '11:30 AM', '02:30 PM', '04:00 PM', '05:30 PM'];
-const CLOSED_WEEKDAYS = [0]; // Domingo
-const MAX_BOOKING_DAYS_AHEAD = 90;
-const MAX_ACTIVE_CLIENT_BOOKINGS = 3;
+// La República Dominicana usa UTC-4 todo el año (sin horario de verano)
+const STUDIO_UTC_OFFSET_HOURS = -4;
 const ACTIVE_STATUSES = ['Confirmada', 'Pendiente Depósito'];
 
 // Render está detrás de un proxy: necesario para que req.ip sea la IP real (rate limit)
@@ -55,7 +56,10 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Servir solo los archivos públicos del frontend (nunca server.js, modelos ni configuración)
-const PUBLIC_FILES = ['index.html', 'clientes.html', 'styles.css', 'clientes.css', 'app.js', 'clientes.js', 'data.js', 'config.js', 'theme-guard.js'];
+const PUBLIC_FILES = [
+  'index.html', 'clientes.html', 'styles.css', 'clientes.css', 'app.js', 'clientes.js', 'data.js',
+  'config.js', 'theme-guard.js', 'notificaciones.js', 'sw.js', 'manifest-panel.webmanifest', 'manifest-clientes.webmanifest'
+];
 PUBLIC_FILES.forEach(file => {
   app.get(`/${file}`, (req, res) => res.sendFile(path.join(__dirname, file)));
 });
@@ -73,6 +77,12 @@ async function connectMongoDB() {
     console.log('✅ Conectado exitosamente a MongoDB Atlas (Niskin Beauty Studio)');
   } catch (err) {
     console.error('❌ Error conectando a MongoDB:', err.message);
+    return;
+  }
+  try {
+    await notify.initPush();
+  } catch (err) {
+    console.error('❌ No se pudieron preparar las notificaciones push:', err.message);
   }
 }
 
@@ -153,12 +163,89 @@ function nowMinutesInStudio() {
   return Number(parts[0]) * 60 + Number(parts[1]);
 }
 
-// Un horario es reservable si la fecha es futura, o si es hoy y faltan al menos 2 horas
-function isSlotInFuture(dateStr, slot) {
-  const today = todayInStudio();
-  if (dateStr > today) return true;
-  if (dateStr < today) return false;
-  return slotToMinutes(slot) - nowMinutesInStudio() >= 120;
+// Un horario es reservable si faltan al menos `minHoursNotice` horas
+function isSlotInFuture(dateStr, slot, minHoursNotice = 2) {
+  return appointmentTimestamp(dateStr, slot) - Date.now() >= minHoursNotice * 60 * 60 * 1000;
+}
+
+// Momento exacto (epoch ms) de una cita en hora de República Dominicana
+function appointmentTimestamp(dateStr, slot) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const minutes = slotToMinutes(slot);
+  return Date.UTC(y, m - 1, d, Math.floor(minutes / 60) - STUDIO_UTC_OFFSET_HOURS, minutes % 60);
+}
+
+function formatDateEs(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('es-DO', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+  });
+}
+
+// Texto de varias líneas (instrucciones de pago, políticas…): conserva saltos de línea
+function cleanMultiline(value, maxLength = 600) {
+  return String(value ?? '')
+    .replace(/[<>"`\\]/g, '')
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, maxLength);
+}
+
+// ============================================================================
+// CONFIGURACIÓN DEL NEGOCIO
+// ============================================================================
+let settingsCache = null;
+
+async function getSettings() {
+  if (settingsCache) return settingsCache;
+  let doc = await StudioSettings.findOne({ id: 'studio' }).lean();
+  if (!doc) doc = (await StudioSettings.create({ id: 'studio' })).toObject();
+  settingsCache = doc;
+  return doc;
+}
+
+function toPublicSettings(st) {
+  return {
+    businessName: st.businessName,
+    tagline: st.tagline,
+    city: st.city,
+    address: st.address,
+    whatsapp: st.whatsapp,
+    instagram: st.instagram,
+    welcomeMessage: st.welcomeMessage,
+    depositInstructions: st.depositInstructions,
+    cancellationPolicy: st.cancellationPolicy,
+    bookingEnabled: st.bookingEnabled !== false
+  };
+}
+
+function toAdminSettings(st) {
+  return {
+    ...toPublicSettings(st),
+    slots: st.slots,
+    closedWeekdays: st.closedWeekdays,
+    minHoursNotice: st.minHoursNotice,
+    maxDaysAhead: st.maxDaysAhead,
+    maxActiveBookings: st.maxActiveBookings,
+    remindersEnabled: st.remindersEnabled !== false,
+    reminderHoursBefore: st.reminderHoursBefore
+  };
+}
+
+function clampInt(value, min, max, fallback) {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
+function normalizeSlot(slot) {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*$/i.exec(String(slot || ''));
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 1 || h > 12 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')} ${m[3].toUpperCase()}`;
 }
 
 const PUBLIC_TREATMENT_FIELDS = 'id name category durationMin price depositRequired description -_id';
@@ -266,7 +353,7 @@ async function requireAdmin(req, res, next) {
 
 function requireStaffManager(req, res, next) {
   if (req.staff?.role !== 'administradora') {
-    return res.status(403).json({ status: 'error', message: 'Solo una administradora puede gestionar el equipo.' });
+    return res.status(403).json({ status: 'error', message: 'Solo una administradora puede hacer esto.' });
   }
   next();
 }
@@ -462,8 +549,10 @@ app.get('/api/state', requireAdmin, requireMongo, async (req, res) => {
       inventory.length > 0 ||
       treatments.length > 0;
 
+    const st = await getSettings();
     return res.json({
       status: 'ok',
+      settings: toAdminSettings(st),
       hasServerData: hasData,
       data: hasData
         ? {
@@ -487,7 +576,7 @@ app.get('/api/state', requireAdmin, requireMongo, async (req, res) => {
   }
 });
 
-// Sincronizar y guardar cambios del panel en MongoDB (solo administradora)
+// Sincronizar y guardar cambios del panel en MongoDB (equipo)
 app.post('/api/state', requireAdmin, requireMongo, async (req, res) => {
   const { state } = req.body || {};
   if (!state) {
@@ -504,35 +593,257 @@ app.post('/api/state', requireAdmin, requireMongo, async (req, res) => {
   ];
 
   try {
+    // Registros eliminados: nunca se vuelven a crear desde una copia vieja del panel
+    const tombstones = await DeletedRecord.find({}).select('collectionName recordId -_id').lean();
+    const deleted = new Set(tombstones.map(t => `${t.collectionName}:${t.recordId}`));
+    const incoming = {};
+    collections.forEach(([key]) => {
+      incoming[key] = Array.isArray(state[key])
+        ? state[key].filter(item => item && item.id && !deleted.has(`${key}:${item.id}`))
+        : [];
+    });
+
+    // Estado anterior para detectar cambios y avisar por push
+    const [prevAppointments, prevInventory] = await Promise.all([
+      Appointment.find({ id: { $in: incoming.appointments.map(a => a.id) } }).lean(),
+      Inventory.find({ id: { $in: incoming.inventory.map(i => i.id) } }).lean()
+    ]);
+
     const ops = collections
-      .filter(([key]) => Array.isArray(state[key]) && state[key].length > 0)
+      .filter(([key]) => incoming[key].length > 0)
       .map(([key, Model]) =>
         Model.bulkWrite(
-          state[key]
-            .filter(item => item && item.id)
-            .map(item => {
-              const { _id, __v, createdAt, updatedAt, ...fields } = item;
-              return {
-                updateOne: {
-                  filter: { id: item.id },
-                  update: { $set: fields },
-                  upsert: true
-                }
-              };
-            })
+          incoming[key].map(item => {
+            const { _id, __v, createdAt, updatedAt, ...fields } = item;
+            return {
+              updateOne: {
+                filter: { id: item.id },
+                update: { $set: fields },
+                upsert: true
+              }
+            };
+          })
         )
       );
 
     await Promise.all(ops);
 
-    return res.json({
+    res.json({
       status: 'ok',
       savedAt: new Date().toISOString()
     });
+
+    notifyStateChanges(prevAppointments, incoming.appointments, prevInventory, incoming.inventory, req.staff)
+      .catch(err => console.warn('Error preparando notificaciones:', err.message));
   } catch (error) {
     console.error('Error guardando en MongoDB:', error);
     return res.status(500).json({ status: 'error', message: 'No se pudieron guardar los cambios.' });
   }
+});
+
+async function notifyStateChanges(prevAppointments, appointments, prevInventory, inventory, staff) {
+  const st = await getSettings();
+  const prevById = new Map(prevAppointments.map(a => [a.id, a]));
+
+  for (const a of appointments) {
+    const prev = prevById.get(a.id);
+    const when = `${formatDateEs(a.date)} a las ${a.time}`;
+    if (!prev) {
+      if (a.date >= todayInStudio() && ACTIVE_STATUSES.includes(a.status)) {
+        notify.notifyClient(a.patientId, {
+          title: `Tienes una cita en ${st.businessName}`,
+          body: `${a.treatmentName} • ${when} con ${a.specialistName}.`,
+          tag: `cita-${a.id}`
+        });
+      }
+      continue;
+    }
+    if (prev.status !== a.status) {
+      const messages = {
+        'Confirmada': ['¡Tu cita está confirmada! ✨', `${a.treatmentName} • ${when}. Te esperamos.`],
+        'Cancelada': ['Tu cita fue cancelada', `${a.treatmentName} del ${when}. Escríbenos para reprogramar.`],
+        'Completada': [`Gracias por visitarnos 💛`, `Ya puedes ver tu sesión de ${a.treatmentName} en "Mi piel".`]
+      };
+      const msg = messages[a.status];
+      if (msg) notify.notifyClient(a.patientId, { title: msg[0], body: msg[1], tag: `cita-${a.id}` });
+    } else if (prev.date !== a.date || prev.time !== a.time) {
+      notify.notifyClient(a.patientId, {
+        title: 'Tu cita cambió de horario',
+        body: `${a.treatmentName} • ahora el ${when}.`,
+        tag: `cita-${a.id}`
+      });
+    }
+  }
+
+  const prevStock = new Map(prevInventory.map(i => [i.id, i]));
+  const newlyLow = inventory.filter(i => {
+    const prev = prevStock.get(i.id);
+    return prev && Number(prev.stock) > Number(prev.minStock) && Number(i.stock) <= Number(i.minStock);
+  });
+  if (newlyLow.length) {
+    notify.notifyStaff({
+      title: 'Stock bajo en inventario',
+      body: newlyLow.map(i => `${i.name}: quedan ${i.stock} ${i.unit || ''}`.trim()).join(' • '),
+      tag: 'stock-bajo',
+      url: './?vista=inventario'
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Eliminar registros (con marca para que no reaparezcan)
+// ---------------------------------------------------------------------------
+async function markDeleted(collectionName, ids, staff) {
+  if (!ids.length) return;
+  await DeletedRecord.bulkWrite(ids.map(recordId => ({
+    updateOne: {
+      filter: { collectionName, recordId },
+      update: { $set: { collectionName, recordId, deletedBy: staff?.name || '' } },
+      upsert: true
+    }
+  })));
+}
+
+app.delete('/api/admin/appointments/:id', requireAdmin, requireMongo, async (req, res) => {
+  try {
+    const appt = await Appointment.findOne({ id: req.params.id }).lean();
+    if (!appt) return res.status(404).json({ status: 'error', message: 'No se encontró esa cita.' });
+    await Appointment.deleteOne({ id: appt.id });
+    await markDeleted('appointments', [appt.id], req.staff);
+    res.json({ status: 'ok' });
+
+    if (ACTIVE_STATUSES.includes(appt.status) && appt.date >= todayInStudio()) {
+      const st = await getSettings();
+      notify.notifyClient(appt.patientId, {
+        title: 'Tu cita fue cancelada',
+        body: `${appt.treatmentName} del ${formatDateEs(appt.date)} a las ${appt.time}. Escríbenos a ${st.businessName} para reprogramar.`,
+        tag: `cita-${appt.id}`
+      });
+    }
+  } catch (error) {
+    console.error('Error eliminando cita:', error);
+    res.status(500).json({ status: 'error', message: 'No se pudo eliminar la cita.' });
+  }
+});
+
+app.delete('/api/admin/patients/:id', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+  try {
+    const patient = await Patient.findOne({ id: req.params.id }).lean();
+    if (!patient) return res.status(404).json({ status: 'error', message: 'No se encontró esa clienta.' });
+    const appts = await Appointment.find({ patientId: patient.id }).select('id -_id').lean();
+    const apptIds = appts.map(a => a.id);
+    await Promise.all([
+      Patient.deleteOne({ id: patient.id }),
+      Appointment.deleteMany({ patientId: patient.id }),
+      ClientAccount.deleteOne({ patientId: patient.id }),
+      notify.removeSubscriptionsOf('client', patient.id)
+    ]);
+    await markDeleted('patients', [patient.id], req.staff);
+    await markDeleted('appointments', apptIds, req.staff);
+    res.json({ status: 'ok', deletedAppointments: apptIds });
+  } catch (error) {
+    console.error('Error eliminando clienta:', error);
+    res.status(500).json({ status: 'error', message: 'No se pudo eliminar la clienta.' });
+  }
+});
+
+app.delete('/api/admin/treatments/:id', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+  try {
+    const treatment = await Treatment.findOne({ id: req.params.id }).lean();
+    if (!treatment) return res.status(404).json({ status: 'error', message: 'No se encontró ese tratamiento.' });
+    await Treatment.deleteOne({ id: treatment.id });
+    await markDeleted('treatments', [treatment.id], req.staff);
+    res.json({ status: 'ok' });
+  } catch (error) {
+    console.error('Error eliminando tratamiento:', error);
+    res.status(500).json({ status: 'error', message: 'No se pudo eliminar el tratamiento.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Configuración del negocio
+// ---------------------------------------------------------------------------
+app.get('/api/public/settings', requireMongo, async (req, res) => {
+  const st = await getSettings();
+  res.json({ status: 'ok', settings: toPublicSettings(st) });
+});
+
+app.get('/api/admin/settings', requireAdmin, requireMongo, async (req, res) => {
+  const st = await getSettings();
+  res.json({ status: 'ok', settings: toAdminSettings(st) });
+});
+
+app.put('/api/admin/settings', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+  const body = req.body || {};
+  const current = await getSettings();
+  const update = {};
+
+  const textFields = { businessName: 80, tagline: 120, city: 80, address: 160, instagram: 60 };
+  for (const [field, max] of Object.entries(textFields)) {
+    if (body[field] !== undefined) update[field] = cleanText(body[field], max);
+  }
+  for (const field of ['welcomeMessage', 'depositInstructions', 'cancellationPolicy']) {
+    if (body[field] !== undefined) update[field] = cleanMultiline(body[field]);
+  }
+  if (body.whatsapp !== undefined) update.whatsapp = String(body.whatsapp || '').replace(/[^\d+]/g, '').slice(0, 16);
+  if (body.bookingEnabled !== undefined) update.bookingEnabled = Boolean(body.bookingEnabled);
+  if (body.remindersEnabled !== undefined) update.remindersEnabled = Boolean(body.remindersEnabled);
+  if (body.minHoursNotice !== undefined) update.minHoursNotice = clampInt(body.minHoursNotice, 0, 72, current.minHoursNotice);
+  if (body.maxDaysAhead !== undefined) update.maxDaysAhead = clampInt(body.maxDaysAhead, 1, 365, current.maxDaysAhead);
+  if (body.maxActiveBookings !== undefined) update.maxActiveBookings = clampInt(body.maxActiveBookings, 1, 20, current.maxActiveBookings);
+  if (body.reminderHoursBefore !== undefined) update.reminderHoursBefore = clampInt(body.reminderHoursBefore, 1, 72, current.reminderHoursBefore);
+  if (Array.isArray(body.closedWeekdays)) {
+    update.closedWeekdays = [...new Set(body.closedWeekdays.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))];
+  }
+  if (Array.isArray(body.slots)) {
+    const slots = [...new Set(body.slots.map(normalizeSlot).filter(Boolean))].sort((a, b) => slotToMinutes(a) - slotToMinutes(b)).slice(0, 24);
+    if (!slots.length) return res.status(400).json({ status: 'error', message: 'Agrega al menos un horario de atención.' });
+    update.slots = slots;
+  }
+  if (update.businessName !== undefined && update.businessName.length < 2) {
+    return res.status(400).json({ status: 'error', message: 'Escribe el nombre del negocio.' });
+  }
+  if (update.closedWeekdays && update.closedWeekdays.length >= 7) {
+    return res.status(400).json({ status: 'error', message: 'El estudio debe abrir al menos un día.' });
+  }
+
+  try {
+    const doc = await StudioSettings.findOneAndUpdate({ id: 'studio' }, { $set: update }, { new: true, upsert: true }).lean();
+    settingsCache = doc;
+    res.json({ status: 'ok', settings: toAdminSettings(doc) });
+  } catch (error) {
+    console.error('Error guardando configuración:', error);
+    res.status(500).json({ status: 'error', message: 'No se pudo guardar la configuración.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Suscripciones push
+// ---------------------------------------------------------------------------
+app.get('/api/push/public-key', (req, res) => {
+  const key = notify.getPublicKey();
+  if (!key) return res.status(503).json({ status: 'error', message: 'Las notificaciones aún no están listas.' });
+  res.json({ status: 'ok', publicKey: key });
+});
+
+app.post('/api/admin/push/subscribe', requireAdmin, requireMongo, async (req, res) => {
+  const sub = (req.body || {}).subscription;
+  if (!notify.isValidSubscription(sub)) return res.status(400).json({ status: 'error', message: 'Suscripción no válida.' });
+  await notify.saveSubscription('staff', req.staff.id, sub);
+  res.json({ status: 'ok' });
+});
+
+app.post('/api/client/push/subscribe', requireRole('client'), requireMongo, async (req, res) => {
+  const sub = (req.body || {}).subscription;
+  if (!notify.isValidSubscription(sub)) return res.status(400).json({ status: 'error', message: 'Suscripción no válida.' });
+  await notify.saveSubscription('client', req.auth.sub, sub);
+  res.json({ status: 'ok' });
+});
+
+app.post('/api/push/unsubscribe', requireMongo, async (req, res) => {
+  const endpoint = String((req.body || {}).endpoint || '');
+  if (endpoint) await notify.removeSubscription(endpoint);
+  res.json({ status: 'ok' });
 });
 
 // ============================================================================
@@ -619,9 +930,16 @@ app.post('/api/client/register', authLimiter, requireMongo, async (req, res) => 
       throw err;
     }
 
-    return res.status(201).json({
+    res.status(201).json({
       status: 'ok',
       token: createToken('client', patient.id)
+    });
+
+    notify.notifyStaff({
+      title: 'Nueva clienta registrada',
+      body: `${patient.name} creó su cuenta desde la página de reservas.`,
+      tag: `registro-${patient.id}`,
+      url: './?vista=expedientes'
     });
   } catch (error) {
     console.error('Error registrando clienta:', error);
@@ -654,10 +972,11 @@ app.get('/api/client/me', requireRole('client'), requireMongo, async (req, res) 
     if (!patient) {
       return res.status(401).json({ status: 'unauthorized', message: 'Tu cuenta ya no está disponible.' });
     }
-    const [appointments, treatments, specialists] = await Promise.all([
+    const [appointments, treatments, specialists, st] = await Promise.all([
       Appointment.find({ patientId: patient.id }).sort({ date: -1, time: -1 }).lean(),
       Treatment.find({}).select(PUBLIC_TREATMENT_FIELDS).lean(),
-      Specialist.find({}).select(PUBLIC_SPECIALIST_FIELDS).lean()
+      Specialist.find({}).select(PUBLIC_SPECIALIST_FIELDS).lean(),
+      getSettings()
     ]);
 
     return res.json({
@@ -666,11 +985,13 @@ app.get('/api/client/me', requireRole('client'), requireMongo, async (req, res) 
       appointments: appointments.map(toClientAppointment),
       treatments,
       specialists,
+      studio: toPublicSettings(st),
       booking: {
-        slots: STUDIO_SLOTS,
-        closedWeekdays: CLOSED_WEEKDAYS,
+        enabled: st.bookingEnabled !== false,
+        slots: st.slots,
+        closedWeekdays: st.closedWeekdays,
         minDate: todayInStudio(),
-        maxDate: addDays(todayInStudio(), MAX_BOOKING_DAYS_AHEAD)
+        maxDate: addDays(todayInStudio(), st.maxDaysAhead)
       }
     });
   } catch (error) {
@@ -685,17 +1006,18 @@ app.get('/api/client/availability', requireRole('client'), requireMongo, async (
   if (!isValidDateString(date) || !specialistId) {
     return res.status(400).json({ status: 'error', message: 'Fecha o especialista no válidos.' });
   }
-  if (CLOSED_WEEKDAYS.includes(weekdayOf(date))) {
-    return res.json({ status: 'ok', closed: true, available: [] });
-  }
   try {
+    const st = await getSettings();
+    if (st.closedWeekdays.includes(weekdayOf(date))) {
+      return res.json({ status: 'ok', closed: true, available: [] });
+    }
     const taken = await Appointment.find({
       date,
       specialistId: String(specialistId),
       status: { $in: ACTIVE_STATUSES }
     }).select('time -_id').lean();
     const takenTimes = new Set(taken.map(a => a.time));
-    const available = STUDIO_SLOTS.filter(slot => !takenTimes.has(slot) && isSlotInFuture(date, slot));
+    const available = st.slots.filter(slot => !takenTimes.has(slot) && isSlotInFuture(date, slot, st.minHoursNotice));
     return res.json({ status: 'ok', closed: false, available });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: 'No pudimos consultar la disponibilidad.' });
@@ -708,18 +1030,23 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
   if (!isValidDateString(date)) {
     return res.status(400).json({ status: 'error', message: 'Selecciona una fecha válida.' });
   }
-  const today = todayInStudio();
-  if (date < today || date > addDays(today, MAX_BOOKING_DAYS_AHEAD)) {
-    return res.status(400).json({ status: 'error', message: `Puedes reservar desde hoy y hasta ${MAX_BOOKING_DAYS_AHEAD} días después.` });
-  }
-  if (CLOSED_WEEKDAYS.includes(weekdayOf(date))) {
-    return res.status(400).json({ status: 'error', message: 'El estudio no abre ese día. Elige otra fecha.' });
-  }
-  if (!STUDIO_SLOTS.includes(time) || !isSlotInFuture(date, time)) {
-    return res.status(400).json({ status: 'error', message: 'Ese horario ya no está disponible.' });
-  }
 
   try {
+    const st = await getSettings();
+    const today = todayInStudio();
+    if (st.bookingEnabled === false) {
+      return res.status(400).json({ status: 'error', message: 'Las reservas en línea están pausadas. Escríbenos por WhatsApp.' });
+    }
+    if (date < today || date > addDays(today, st.maxDaysAhead)) {
+      return res.status(400).json({ status: 'error', message: `Puedes reservar desde hoy y hasta ${st.maxDaysAhead} días después.` });
+    }
+    if (st.closedWeekdays.includes(weekdayOf(date))) {
+      return res.status(400).json({ status: 'error', message: 'El estudio no abre ese día. Elige otra fecha.' });
+    }
+    if (!st.slots.includes(time) || !isSlotInFuture(date, time, st.minHoursNotice)) {
+      return res.status(400).json({ status: 'error', message: 'Ese horario ya no está disponible.' });
+    }
+
     const [patient, treatment, specialist] = await Promise.all([
       Patient.findOne({ id: req.auth.sub }).lean(),
       Treatment.findOne({ id: String(treatmentId) }).lean(),
@@ -737,7 +1064,7 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       status: { $in: ACTIVE_STATUSES },
       date: { $gte: today }
     });
-    if (activeCount >= MAX_ACTIVE_CLIENT_BOOKINGS) {
+    if (activeCount >= st.maxActiveBookings) {
       return res.status(400).json({
         status: 'error',
         message: `Ya tienes ${activeCount} citas activas. Escríbenos si necesitas agendar más.`
@@ -771,11 +1098,18 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       status: 'Pendiente Depósito'
     });
 
-    return res.status(201).json({
+    res.status(201).json({
       status: 'ok',
       appointment: toClientAppointment(appointment.toObject()),
       depositRequired: treatment.depositRequired
     });
+
+    notify.notifyStaff({
+      title: 'Nueva cita reservada 📅',
+      body: `${patient.name} • ${treatment.name} • ${formatDateEs(date)} a las ${time} con ${specialist.name}. Pendiente de depósito.`,
+      tag: `cita-${appointment.id}`,
+      url: './?vista=agenda'
+    }, { specialistId: specialist.id });
   } catch (error) {
     console.error('Error creando cita de clienta:', error);
     return res.status(500).json({ status: 'error', message: 'No pudimos agendar tu cita. Inténtalo de nuevo.' });
@@ -793,7 +1127,14 @@ app.post('/api/client/appointments/:id/cancel', requireRole('client'), requireMo
     }
     appointment.status = 'Cancelada';
     await appointment.save();
-    return res.json({ status: 'ok', appointment: toClientAppointment(appointment.toObject()) });
+    res.json({ status: 'ok', appointment: toClientAppointment(appointment.toObject()) });
+
+    notify.notifyStaff({
+      title: 'Cita cancelada por la clienta',
+      body: `${appointment.patientName} canceló ${appointment.treatmentName} del ${formatDateEs(appointment.date)} a las ${appointment.time}.`,
+      tag: `cita-${appointment.id}`,
+      url: './?vista=agenda'
+    }, { specialistId: appointment.specialistId });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: 'No pudimos cancelar la cita.' });
   }
@@ -811,6 +1152,40 @@ app.get(['/clientes', '/registro'], (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// ============================================================================
+// RECORDATORIOS AUTOMÁTICOS (push a la clienta antes de su cita confirmada)
+// Nota: en el plan gratuito de Render el servidor "duerme"; los recordatorios se
+// envían cuando está despierto (cualquier visita o un monitor externo lo despierta).
+// ============================================================================
+async function sendDueReminders() {
+  if (mongoose.connection.readyState !== 1) return;
+  try {
+    const st = await getSettings();
+    if (st.remindersEnabled === false) return;
+    const windowMs = (st.reminderHoursBefore || 24) * 60 * 60 * 1000;
+    const today = todayInStudio();
+    const candidates = await Appointment.find({
+      status: 'Confirmada',
+      reminderSentAt: { $exists: false },
+      date: { $gte: today, $lte: addDays(today, 3) }
+    }).lean();
+    const now = Date.now();
+    for (const a of candidates) {
+      const diff = appointmentTimestamp(a.date, a.time) - now;
+      if (diff <= 0 || diff > windowMs) continue;
+      await Appointment.updateOne({ id: a.id }, { $set: { reminderSentAt: new Date() } });
+      notify.notifyClient(a.patientId, {
+        title: `Recordatorio: tu cita en ${st.businessName}`,
+        body: `${a.treatmentName} • ${formatDateEs(a.date)} a las ${a.time} con ${a.specialistName}.`,
+        tag: `recordatorio-${a.id}`
+      });
+    }
+  } catch (err) {
+    console.warn('Error enviando recordatorios:', err.message);
+  }
+}
+setInterval(sendDueReminders, 10 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`🚀 Servidor Niskin Beauty Studio ejecutándose en el puerto ${PORT}`);

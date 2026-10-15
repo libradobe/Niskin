@@ -7,7 +7,9 @@ const RENDER_URL_STORAGE_KEY = 'niskin_render_backend_url';
 const ACTIVE_STATUSES = ['Confirmada', 'Pendiente Depósito'];
 
 const cp = {
-  data: null,           // { profile, appointments, treatments, specialists, booking }
+  studio: null,         // datos públicos del negocio (Configuración)
+  pushStatus: null,
+  data: null,           // { profile, appointments, treatments, specialists, booking, studio }
   tab: 'book',
   authMode: 'register',
   booking: {
@@ -66,6 +68,54 @@ function toISODate(d) {
 function formatLongDate(iso) {
   const text = parseISODate(iso).toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' });
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// ---------------------------------------------------------------------------
+// Datos del negocio y WhatsApp
+// ---------------------------------------------------------------------------
+function studio() {
+  return cp.data?.studio || cp.studio || {};
+}
+
+function applyStudioBranding() {
+  const st = studio();
+  if (st.businessName) document.title = `Agenda tu cita — ${st.businessName}`;
+  const welcome = document.getElementById('cpWelcome');
+  if (welcome && st.welcomeMessage) welcome.textContent = st.welcomeMessage;
+  const eyebrow = document.getElementById('cpHeroEyebrow');
+  if (eyebrow && st.businessName) eyebrow.textContent = st.businessName;
+  const help = document.getElementById('cpForgotHelp');
+  if (help) {
+    help.innerHTML = st.whatsapp
+      ? '¿Olvidaste tu contraseña? <a href="#" onclick="contactStudio(\'Hola, olvidé mi contraseña de la página de citas. ¿Me pueden ayudar?\');return false;">Escríbenos por WhatsApp</a> y te ayudamos.'
+      : '¿Olvidaste tu contraseña? Escríbenos y te ayudamos.';
+  }
+}
+
+async function loadPublicStudio() {
+  try {
+    const res = await fetch(`${getApiBase()}/api/public/settings`, { cache: 'no-store' });
+    const data = await res.json();
+    if (data.settings) {
+      cp.studio = data.settings;
+      applyStudioBranding();
+    }
+  } catch (e) {}
+}
+
+function contactStudio(message) {
+  NiskinWhatsApp.open(studio().whatsapp, message);
+}
+
+function sendDepositProof(appointmentId) {
+  const a = cp.data.appointments.find(x => x.id === appointmentId);
+  if (!a) return;
+  const t = cp.data.treatments.find(x => x.id === a.treatmentId);
+  const name = cp.data.profile.name;
+  contactStudio(
+    `Hola, soy ${name} 👋. Reservé *${a.treatmentName}* para el *${formatLongDate(a.date)} a las ${a.time}*` +
+    `${t?.depositRequired ? ` y te envío el comprobante del depósito de *${formatMoney(t.depositRequired)}*` : ''}. ¡Gracias!`
+  );
 }
 
 function showToast(message) {
@@ -217,6 +267,7 @@ async function submitLogin(event) {
 }
 
 function clientLogout(expired = false) {
+  if (window.NiskinPush) NiskinPush.disable({ apiBase: getApiBase() });
   storageRemove(CLIENT_TOKEN_KEY);
   cp.data = null;
   cp.booking = { treatmentId: '', specialistId: '', date: '', time: '', available: null, closed: false, autoDate: true };
@@ -263,7 +314,9 @@ async function loadClientData() {
     avatar.textContent = profile.initials || 'NB';
     avatar.className = `pastel-avatar ${profile.pastelClass || 'pastel-rose'}`;
 
+    applyStudioBranding();
     showAppView();
+    cp.pushStatus = window.NiskinPush ? await NiskinPush.status() : 'unsupported';
     renderClientPanel();
     refreshAvailability();
   } finally {
@@ -331,9 +384,11 @@ function setClientTab(tab) {
 function renderClientPanel() {
   const panel = document.getElementById('cpPanel');
   if (!cp.data) return;
-  if (cp.tab === 'appointments') panel.innerHTML = renderAppointmentsTab();
-  else if (cp.tab === 'skin') panel.innerHTML = renderSkinTab();
-  else panel.innerHTML = renderBookingTab();
+  let html;
+  if (cp.tab === 'appointments') html = renderAppointmentsTab();
+  else if (cp.tab === 'skin') html = renderSkinTab();
+  else html = renderBookingTab();
+  panel.innerHTML = renderClientPushCard() + html;
   if (cp.tab === 'skin') initPhotoSlider();
   if (cp.tab === 'book') {
     const selected = panel.querySelector('.cp-date.selected');
@@ -347,6 +402,15 @@ function renderClientPanel() {
 function renderBookingTab() {
   const { treatments, specialists } = cp.data;
   const dates = getBookableDates();
+
+  if (cp.data.booking.enabled === false) {
+    return `
+      <div class="cp-empty">
+        <p>Por ahora las reservas en línea están pausadas.</p>
+        ${studio().whatsapp ? `<button type="button" class="btn-gold" onclick="contactStudio('Hola, quisiera agendar una cita.')">Agendar por WhatsApp</button>` : ''}
+      </div>
+    `;
+  }
 
   return `
     <section class="cp-step">
@@ -449,8 +513,10 @@ function renderSummary() {
           <li><span>Precio</span><strong>${formatMoney(t.price)}</strong></li>
         </ul>
         ${t.depositRequired ? `
-          <p class="cp-note">Para asegurar tu espacio se requiere un depósito de <strong>${formatMoney(t.depositRequired)}</strong>. Te contactaremos por WhatsApp con los datos de pago.</p>
+          <p class="cp-note">Para asegurar tu espacio se requiere un depósito de <strong>${formatMoney(t.depositRequired)}</strong>.${studio().depositInstructions ? '' : ' Te contactaremos por WhatsApp con los datos de pago.'}</p>
+          ${studio().depositInstructions ? `<div class="cp-deposit"><strong>Datos para el depósito</strong><p class="cp-pre">${esc(studio().depositInstructions)}</p></div>` : ''}
         ` : ''}
+        ${studio().cancellationPolicy ? `<p class="cp-policy"><strong>Política de cancelación:</strong> ${esc(studio().cancellationPolicy)}</p>` : ''}
       ` : `
         <p class="cp-note">Selecciona tratamiento, especialista, día y hora para continuar.</p>
       `}
@@ -522,6 +588,63 @@ async function submitBooking() {
 }
 
 // ---------------------------------------------------------------------------
+// Notificaciones push de la clienta
+// ---------------------------------------------------------------------------
+const CLIENT_PUSH_PROMPT_KEY = 'niskin_client_push_prompt_dismissed';
+
+function renderClientPushCard() {
+  if (storageGet(CLIENT_PUSH_PROMPT_KEY) === '1') return '';
+  if (cp.pushStatus === 'available') {
+    return `
+      <div class="cp-push">
+        <div>
+          <strong>🔔 ¿Te avisamos?</strong>
+          <p>Recibe una notificación cuando confirmemos tu cita y un recordatorio antes de ella.</p>
+        </div>
+        <div class="cp-push-actions">
+          <button type="button" class="btn-soft btn-sm" onclick="dismissClientPush()">Ahora no</button>
+          <button type="button" class="btn-gold btn-sm" onclick="enableClientPush()">Activar</button>
+        </div>
+      </div>
+    `;
+  }
+  if (cp.pushStatus === 'ios-install') {
+    return `
+      <div class="cp-push">
+        <div>
+          <strong>🔔 Recibe avisos de tus citas</strong>
+          <p>En iPhone toca <b>Compartir</b> → <b>Añadir a pantalla de inicio</b> y abre Niskin desde ahí para activar las notificaciones.</p>
+        </div>
+        <div class="cp-push-actions">
+          <button type="button" class="btn-soft btn-sm" onclick="dismissClientPush()">Entendido</button>
+        </div>
+      </div>
+    `;
+  }
+  return '';
+}
+
+function dismissClientPush() {
+  storageSet(CLIENT_PUSH_PROMPT_KEY, '1');
+  renderClientPanel();
+}
+
+async function enableClientPush() {
+  try {
+    await NiskinPush.enable({
+      apiBase: getApiBase(),
+      subscribePath: '/api/client/push/subscribe',
+      headers: { Authorization: `Bearer ${storageGet(CLIENT_TOKEN_KEY)}` }
+    });
+    showToast('¡Listo! Te avisaremos sobre tus citas. 🔔');
+  } catch (err) {
+    showToast(err.message);
+  }
+  cp.pushStatus = await NiskinPush.status();
+  renderClientPanel();
+}
+
+// ---------------------------------------------------------------------------
 // Mis citas
 // ---------------------------------------------------------------------------
 function statusClass(status) {
@@ -543,7 +666,10 @@ function renderAppointmentCard(a, { allowCancel }) {
         <p>Con ${esc(a.specialistName)} • ${formatMoney(a.price)}</p>
         <div class="cp-appt-actions">
           <span class="status-pill ${statusClass(a.status)}"><span class="dot"></span>${esc(a.status)}</span>
-          ${allowCancel ? `<button type="button" class="btn-soft btn-sm" onclick="cancelAppointment('${esc(a.id)}')">Cancelar</button>` : ''}
+          <span class="cp-appt-buttons">
+            ${a.status === 'Pendiente Depósito' && studio().whatsapp ? `<button type="button" class="btn-soft btn-sm cp-wa-soft" onclick="sendDepositProof('${esc(a.id)}')">Enviar comprobante</button>` : ''}
+            ${allowCancel ? `<button type="button" class="btn-soft btn-sm" onclick="cancelAppointment('${esc(a.id)}')">Cancelar</button>` : ''}
+          </span>
         </div>
       </div>
     </article>
@@ -560,7 +686,10 @@ function renderAppointmentsTab() {
   const banner = cp.lastBooking ? `
     <div class="cp-success">
       <strong>✨ ¡Tu cita está reservada!</strong>
-      <p>Queda <em>pendiente de depósito</em>${cp.lastBooking.depositRequired ? ` (${formatMoney(cp.lastBooking.depositRequired)})` : ''}. Te escribiremos por WhatsApp para confirmarla.</p>
+      <p>Queda <em>pendiente de depósito</em>${cp.lastBooking.depositRequired ? ` (${formatMoney(cp.lastBooking.depositRequired)})` : ''}.
+      ${studio().whatsapp ? 'Cuando hagas el depósito, envíanos el comprobante por WhatsApp para confirmarla.' : 'Te escribiremos por WhatsApp para confirmarla.'}</p>
+      ${studio().depositInstructions ? `<p class="cp-pre" style="margin-top:8px;">${esc(studio().depositInstructions)}</p>` : ''}
+      ${studio().whatsapp ? `<button type="button" class="cp-wa-btn" onclick="sendDepositProof('${esc(cp.lastBooking.appointment.id)}')">Enviar comprobante por WhatsApp</button>` : ''}
     </div>
   ` : '';
   cp.lastBooking = null;
@@ -576,6 +705,9 @@ function renderAppointmentsTab() {
         </div>
       `}
     </section>
+    ${studio().whatsapp ? `
+      <button type="button" class="cp-help-link" onclick="contactStudio('Hola, tengo una pregunta sobre mi cita.')">¿Dudas sobre tu cita? Escríbenos por WhatsApp</button>
+    ` : ''}
     ${past.length ? `
       <section class="cp-step">
         <h2>Historial</h2>
@@ -706,6 +838,7 @@ function initPhotoSlider() {
 // Inicio
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
+  loadPublicStudio();
   if (storageGet(CLIENT_TOKEN_KEY)) {
     try {
       await loadClientData();
