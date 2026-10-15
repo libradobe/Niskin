@@ -103,6 +103,10 @@ async function loadPublicStudio() {
   } catch (e) {}
 }
 
+function depositNeeded(treatment) {
+  return studio().requireDeposit !== false && Number(treatment?.depositRequired) > 0;
+}
+
 function contactStudio(message) {
   NiskinWhatsApp.open(studio().whatsapp, message);
 }
@@ -113,7 +117,7 @@ function sendDepositProof(appointmentId) {
   const t = cp.data.treatments.find(x => x.id === a.treatmentId);
   const name = cp.data.profile.name;
   contactStudio(
-    `Hola, soy ${name} 👋. Reservé *${a.treatmentName}* para el *${formatLongDate(a.date)} a las ${a.time}*` +
+    `Hola, soy ${name}. Reservé *${a.treatmentName}* para el *${formatLongDate(a.date)} a las ${a.time}*` +
     `${t?.depositRequired ? ` y te envío el comprobante del depósito de *${formatMoney(t.depositRequired)}*` : ''}. ¡Gracias!`
   );
 }
@@ -512,10 +516,12 @@ function renderSummary() {
           <li><span>Hora</span><strong>${esc(time)}</strong></li>
           <li><span>Precio</span><strong>${formatMoney(t.price)}</strong></li>
         </ul>
-        ${t.depositRequired ? `
-          <p class="cp-note">Para asegurar tu espacio se requiere un depósito de <strong>${formatMoney(t.depositRequired)}</strong>.${studio().depositInstructions ? '' : ' Te contactaremos por WhatsApp con los datos de pago.'}</p>
+        ${depositNeeded(t) ? `
+          <p class="cp-note">Para asegurar tu espacio se requiere un depósito de <strong>${formatMoney(t.depositRequired)}</strong>. El resto se paga al finalizar tu sesión.${studio().depositInstructions ? '' : ' Te contactaremos por WhatsApp con los datos de pago.'}</p>
           ${studio().depositInstructions ? `<div class="cp-deposit"><strong>Datos para el depósito</strong><p class="cp-pre">${esc(studio().depositInstructions)}</p></div>` : ''}
-        ` : ''}
+        ` : `
+          <p class="cp-note">No necesitas depósito: tu cita queda confirmada y pagas el total de <strong>${formatMoney(t.price)}</strong> al finalizar tu sesión.</p>
+        `}
         ${studio().cancellationPolicy ? `<p class="cp-policy"><strong>Política de cancelación:</strong> ${esc(studio().cancellationPolicy)}</p>` : ''}
       ` : `
         <p class="cp-note">Selecciona tratamiento, especialista, día y hora para continuar.</p>
@@ -664,6 +670,9 @@ function renderAppointmentCard(a, { allowCancel }) {
         <h3>${esc(a.treatmentName)}</h3>
         <p>${esc(formatLongDate(a.date))} • ${esc(a.time)}</p>
         <p>Con ${esc(a.specialistName)} • ${formatMoney(a.price)}</p>
+        ${a.status === 'Confirmada' ? `<p class="cp-pay-note">${a.paymentMode === 'al-finalizar'
+          ? `Pagas ${formatMoney(a.price)} al finalizar tu sesión.`
+          : `Depósito recibido: ${formatMoney(a.depositPaid)}. Resto al finalizar: ${formatMoney(Math.max(0, a.price - a.depositPaid))}.`}</p>` : ''}
         <div class="cp-appt-actions">
           <span class="status-pill ${statusClass(a.status)}"><span class="dot"></span>${esc(a.status)}</span>
           <span class="cp-appt-buttons">
@@ -683,7 +692,13 @@ function renderAppointmentsTab() {
     .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   const past = cp.data.appointments.filter(a => !upcoming.includes(a));
 
-  const banner = cp.lastBooking ? `
+  const confirmedNow = cp.lastBooking?.appointment?.status === 'Confirmada';
+  const banner = cp.lastBooking && confirmedNow ? `
+    <div class="cp-success">
+      <strong>✨ ¡Tu cita está confirmada!</strong>
+      <p>Pagas el total de <strong>${formatMoney(cp.lastBooking.appointment.price)}</strong> al finalizar tu sesión. ¡Te esperamos!</p>
+    </div>
+  ` : cp.lastBooking ? `
     <div class="cp-success">
       <strong>✨ ¡Tu cita está reservada!</strong>
       <p>Queda <em>pendiente de depósito</em>${cp.lastBooking.depositRequired ? ` (${formatMoney(cp.lastBooking.depositRequired)})` : ''}.

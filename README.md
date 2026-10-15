@@ -67,11 +67,12 @@ El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estát
 
 En **Configuración** (solo administradoras) se definen: nombre, frase, ciudad, dirección, Instagram, mensaje de bienvenida de la página de clientas, **WhatsApp del estudio**, **datos para el depósito**, política de cancelación, días y horarios que se ofrecen, anticipación mínima, hasta cuántos días se puede reservar, máximo de citas activas por clienta y recordatorios.
 
-## 5. WhatsApp (wa.me)
+## 5. WhatsApp
 
 - **Panel:** cada cita tiene un botón de WhatsApp que abre un mensaje listo para la clienta según su estado (pedir depósito, confirmar/recordar, cancelación o seguimiento). En el expediente hay un botón para escribirle.
 - **Clientas:** después de reservar pueden **enviar el comprobante del depósito** por WhatsApp al número del estudio, y escribir si olvidaron la contraseña.
 - Los números dominicanos (809/829/849) se convierten solos al formato internacional.
+- Los enlaces usan `api.whatsapp.com/send` y los mensajes no llevan emojis, porque la redirección de `wa.me` en Android los convertía en �.
 
 ## 6. Notificaciones push
 
@@ -93,6 +94,10 @@ Chrome y Safari respetan el tema claro de la app. Samsung Internet, en cambio, o
 - **Clientas:** `https://TU-DOMINIO/clientes` (también `/registro` o `/citas`). Ahí se registran, agendan, ven y cancelan sus citas.
 - **Equipo:** `https://TU-DOMINIO/` → pide la contraseña del panel.
 
-Las citas reservadas por clientas llegan al panel como **Pendiente Depósito**. Confírmalas con el botón 💳 en la Agenda o en el Panel Principal cuando recibas el depósito.
+**Pagos de las citas**
+
+- Si en Configuración está activo **Pedir depósito para reservar en línea**, las reservas llegan como **Pendiente Depósito**. Con el botón 💳 eliges **Confirmar con depósito** (monto y método) o **Confirmar sin depósito**, y en ese caso la clienta paga el total al finalizar.
+- Si lo desactivas, las reservas en línea quedan **confirmadas** de inmediato y la clienta paga el total al terminar.
+- Al completar la sesión (✓) se abre **Cobrar y completar**: muestra lo que falta por cobrar (el total si no hubo depósito), eliges el método de pago y se registra en Finanzas.
 
 Reglas de la reserva online (en `server.js`): horarios `09:00 AM, 10:00 AM, 11:30 AM, 02:30 PM, 04:00 PM, 05:30 PM`; domingos cerrado; hasta 90 días de anticipación; mínimo 2 horas antes; máximo 3 citas activas por clienta; no se puede reservar un horario ocupado de la misma especialista.

@@ -110,10 +110,14 @@ window.NiskinWhatsApp = {
     if (digits.length === 10 && /^(809|829|849)/.test(digits)) return `1${digits}`;
     return digits;
   },
+  // Se usa api.whatsapp.com/send en vez de wa.me: la redirección de wa.me daña en Android
+  // algunos caracteres especiales (aparecen como �). Los mensajes además evitan emojis.
   link(phone, message) {
     const number = this.normalizePhone(phone);
-    const text = encodeURIComponent(message || '');
-    return number ? `https://wa.me/${number}?text=${text}` : `https://wa.me/?text=${text}`;
+    const params = new URLSearchParams();
+    if (number) params.set('phone', number);
+    params.set('text', message || '');
+    return `https://api.whatsapp.com/send?${params.toString().replace(/\+/g, '%20')}`;
   },
   open(phone, message) {
     window.open(this.link(phone, message), '_blank', 'noopener');

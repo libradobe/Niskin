@@ -66,6 +66,9 @@ const AppointmentSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   depositPaid: { type: Number, default: 0 },
   status: { type: String, default: 'Confirmada' },
+  // 'deposito': se reservó con depósito • 'al-finalizar': sin depósito, paga todo al terminar
+  paymentMode: { type: String, default: 'deposito' },
+  finalPaid: { type: Number, default: 0 },
   reminderSentAt: { type: Date }
 }, { timestamps: true });
 
@@ -154,6 +157,7 @@ const StudioSettingsSchema = new mongoose.Schema({
   welcomeMessage: { type: String, default: '' },
   depositInstructions: { type: String, default: '' },
   cancellationPolicy: { type: String, default: '' },
+  requireDeposit: { type: Boolean, default: true },
   bookingEnabled: { type: Boolean, default: true },
   slots: { type: [String], default: ['09:00 AM', '10:00 AM', '11:30 AM', '02:30 PM', '04:00 PM', '05:30 PM'] },
   closedWeekdays: { type: [Number], default: [0] },

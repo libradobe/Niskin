@@ -733,27 +733,37 @@ function buildAppointmentWhatsApp(app, patient) {
   const firstName = nameWithoutTitles(patient?.name || app.patientName)[0] || '';
   const when = `${formatDateLong(app.date)} a las ${app.time}`;
   const treatment = state.treatments.find(t => t.id === app.treatmentId);
+  const details = [
+    `*${app.treatmentName}*`,
+    `Fecha: ${when}`,
+    `Especialista: ${app.specialistName}`,
+    st.address ? `Dirección: ${st.address}` : ''
+  ].filter(Boolean).join('\n');
 
   if (app.status === 'Pendiente Depósito') {
     const deposit = treatment ? formatMoney(treatment.depositRequired) : 'el depósito';
     return [
-      `Hola ${firstName} 👋, te escribimos de ${business}.`,
-      `Recibimos tu reserva de *${app.treatmentName}* para el *${when}* con ${app.specialistName}.`,
+      `Hola ${firstName}, te escribimos de ${business}.`,
+      `Recibimos tu reserva:\n${details}`,
       `Para confirmarla, realiza el depósito de *${deposit}*${st.depositInstructions ? `:\n${st.depositInstructions}` : '.'}`,
-      'Cuando lo hagas, envíanos el comprobante por aquí. ¡Gracias! ✨'
+      'Cuando lo hagas, envíanos el comprobante por aquí. ¡Gracias!'
     ].join('\n\n');
   }
   if (app.status === 'Confirmada') {
+    const payAtEnd = isPayAtEnd(app);
     return [
-      `Hola ${firstName} ✨, te recordamos tu cita en ${business}:`,
-      `*${app.treatmentName}*\n📅 ${when}\n👩‍⚕️ ${app.specialistName}${st.address ? `\n📍 ${st.address}` : ''}`,
+      `Hola ${firstName}, tu cita en ${business} está confirmada:`,
+      details,
+      payAtEnd
+        ? `El pago de *${formatMoney(app.price)}* se realiza al finalizar tu sesión.`
+        : `Ya recibimos tu depósito de ${formatMoney(app.depositPaid)}. El resto (*${formatMoney(Math.max(0, app.price - app.depositPaid))}*) se paga al finalizar tu sesión.`,
       '¡Te esperamos! Si necesitas reprogramar, responde a este mensaje.'
     ].join('\n\n');
   }
   if (app.status === 'Cancelada') {
-    return `Hola ${firstName}, tu cita de *${app.treatmentName}* del ${when} quedó cancelada. Si quieres reprogramarla, respóndenos por aquí y buscamos otro horario. 💛`;
+    return `Hola ${firstName}, tu cita de *${app.treatmentName}* del ${when} quedó cancelada. Si quieres reprogramarla, respóndenos por aquí y buscamos otro horario.`;
   }
-  return `Hola ${firstName}, gracias por visitarnos en ${business} 💛. ¿Cómo sentiste tu piel después de tu sesión de *${app.treatmentName}*? Cualquier duda, escríbenos.`;
+  return `Hola ${firstName}, gracias por visitarnos en ${business}. ¿Cómo sentiste tu piel después de tu sesión de *${app.treatmentName}*? Cualquier duda, escríbenos.`;
 }
 
 function sendAppointmentWhatsApp(appointmentId) {
@@ -770,7 +780,7 @@ function sendPatientWhatsApp(patientId) {
   const patient = state.patients.find(p => p.id === patientId);
   if (!patient) return;
   const st = studioSettings();
-  NiskinWhatsApp.open(patient.phone, `Hola ${nameWithoutTitles(patient.name)[0]} 👋, te escribimos de ${st.businessName || 'Niskin Beauty Studio'}.`);
+  NiskinWhatsApp.open(patient.phone, `Hola ${nameWithoutTitles(patient.name)[0]}, te escribimos de ${st.businessName || 'Niskin Beauty Studio'}.`);
 }
 
 // ============================================================================
@@ -946,6 +956,10 @@ function renderSettingsView() {
           <label for="sWhatsapp">WhatsApp del estudio</label>
           <input id="sWhatsapp" class="form-control" type="tel" inputmode="tel" maxlength="20" value="${escapeHTML(st.whatsapp)}" placeholder="809-555-0123">
         </div>
+        <label class="settings-switch">
+          <input type="checkbox" id="sRequireDeposit" ${st.requireDeposit !== false ? 'checked' : ''}>
+          <span>Pedir depósito para reservar en línea. Si lo desactivas, las reservas quedan confirmadas y la clienta paga el total al finalizar.</span>
+        </label>
         <div class="form-group">
           <label for="sDeposit">Datos para el depósito</label>
           <textarea id="sDeposit" class="form-control" rows="4" maxlength="600" placeholder="Banco Popular — Cuenta de ahorros 000000000 — A nombre de ...">${escapeHTML(st.depositInstructions)}</textarea>
@@ -1060,6 +1074,7 @@ function collectSettingsForm() {
     depositInstructions: val('sDeposit'),
     cancellationPolicy: val('sPolicy'),
     bookingEnabled: document.getElementById('sBookingEnabled')?.checked ?? true,
+    requireDeposit: document.getElementById('sRequireDeposit')?.checked ?? true,
     closedWeekdays: [0, 1, 2, 3, 4, 5, 6].filter(d => !openDays.includes(d)),
     minHoursNotice: Number(val('sMinHours')),
     maxDaysAhead: Number(val('sMaxDays')),
@@ -1478,7 +1493,7 @@ function renderDashboardView() {
                   <h4>Depósito pendiente • ${app.patientName}</h4>
                   <p>${app.treatmentName} • ${app.date} (${app.time})</p>
                 </div>
-                <button class="btn-soft btn-sm" onclick="confirmAppointmentDeposit('${app.id}')">Confirmar</button>
+                <button class="btn-soft btn-sm" onclick="openConfirmAppointmentModal('${app.id}')">Confirmar</button>
               </div>
             `).join('')}
             ${!pendingDeposits.length && !lowStockItems.length ? `
@@ -1519,7 +1534,11 @@ function renderAppointmentRow(app) {
           ${app.status}
         </span>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">
-          Depósito: ${formatMoney(app.depositPaid)}
+          ${app.status === 'Completada'
+            ? `Cobrado: ${formatMoney(Number(app.depositPaid || 0) + Number(app.finalPaid || 0))}`
+            : isPayAtEnd(app)
+              ? `Paga al finalizar: ${formatMoney(app.price)}`
+              : `Depósito: ${formatMoney(app.depositPaid)}`}
         </div>
       </div>
       <div class="row-actions">
@@ -1530,12 +1549,12 @@ function renderAppointmentRow(app) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>
         </button>
         ${app.status === 'Pendiente Depósito' ? `
-          <button class="round-action-btn" title="Confirmar depósito recibido" onclick="confirmAppointmentDeposit('${app.id}')">
+          <button class="round-action-btn" title="Confirmar cita (con o sin depósito)" onclick="openConfirmAppointmentModal('${app.id}')">
             💳
           </button>
         ` : ''}
         ${app.status !== 'Completada' && !isCancelled ? `
-          <button class="round-action-btn" title="Completar sesión, descontar insumos y registrar ingreso" onclick="completeAppointmentSession('${app.id}')">
+          <button class="round-action-btn" title="Completar sesión y cobrar" onclick="openCompleteSessionModal('${app.id}')">
             ✓
           </button>
         ` : ''}
@@ -1680,12 +1699,63 @@ function setAgendaFilter(status) {
   renderWorkspace();
 }
 
-function confirmAppointmentDeposit(appointmentId) {
+const PAYMENT_METHODS = ['Transferencia Bancaria', 'Efectivo', 'Tarjeta / POS'];
+
+function isPayAtEnd(app) {
+  return app.paymentMode === 'al-finalizar';
+}
+
+function paymentMethodOptions(selected) {
+  return PAYMENT_METHODS.map(m => `<option ${m === selected ? 'selected' : ''}>${m}</option>`).join('');
+}
+
+// Confirmar una cita pendiente: con depósito recibido o sin depósito (paga todo al finalizar)
+function openConfirmAppointmentModal(appointmentId) {
   const app = state.appointments.find(a => a.id === appointmentId);
   if (!app || app.status !== 'Pendiente Depósito') return;
   const treatment = state.treatments.find(t => t.id === app.treatmentId);
-  const deposit = treatment ? treatment.depositRequired : 1000;
+  const suggested = treatment ? treatment.depositRequired : 0;
+  openModalWithHTML(
+    `Confirmar cita — ${app.patientName}`,
+    `
+      <p style="font-size:0.88rem;color:var(--text-secondary);">${escapeHTML(app.treatmentName)} • ${escapeHTML(formatDateLong(app.date))} a las ${escapeHTML(app.time)} • Precio ${formatMoney(app.price)}</p>
+      <div class="confirm-option">
+        <h4>Recibí el depósito</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="mDepAmount">Monto recibido</label>
+            <input id="mDepAmount" type="number" min="1" class="form-control" value="${escapeHTML(suggested)}">
+          </div>
+          <div class="form-group">
+            <label for="mDepMethod">Método</label>
+            <select id="mDepMethod" class="form-control">${paymentMethodOptions('Transferencia Bancaria')}</select>
+          </div>
+        </div>
+        <button class="btn-gold btn-block" onclick="confirmAppointmentDeposit('${escapeHTML(app.id)}')">Confirmar con depósito</button>
+      </div>
+      <div class="confirm-option">
+        <h4>Confirmar sin depósito</h4>
+        <p style="font-size:0.82rem;color:var(--text-secondary);">La cita queda confirmada y la clienta paga el total (${formatMoney(app.price)}) al finalizar su sesión.</p>
+        <button class="btn-soft btn-block" onclick="confirmWithoutDeposit('${escapeHTML(app.id)}')">Confirmar — paga al finalizar</button>
+      </div>
+    `,
+    `<button class="btn-soft" onclick="closeModal()">Cancelar</button>`
+  );
+}
+
+function confirmAppointmentDeposit(appointmentId) {
+  const app = state.appointments.find(a => a.id === appointmentId);
+  if (!app || app.status !== 'Pendiente Depósito') return;
+  const amountInput = document.getElementById('mDepAmount');
+  const treatment = state.treatments.find(t => t.id === app.treatmentId);
+  const deposit = amountInput ? Number(amountInput.value) : (treatment ? treatment.depositRequired : 0);
+  if (!(deposit > 0)) {
+    showToast('Escribe el monto del depósito recibido.');
+    return;
+  }
+  const method = document.getElementById('mDepMethod')?.value || 'Transferencia Bancaria';
   app.depositPaid = deposit;
+  app.paymentMode = 'deposito';
   app.status = 'Confirmada';
 
   state.finances.unshift({
@@ -1694,30 +1764,82 @@ function confirmAppointmentDeposit(appointmentId) {
     concept: `Depósito de Reserva (${app.treatmentName}) — ${app.patientName}`,
     category: 'Depósito de Reserva',
     type: 'Ingreso',
-    method: 'Transferencia Bancaria',
+    method,
     amount: deposit
   });
 
   saveState();
-  showToast(`Depósito de ${formatMoney(deposit)} confirmado para ${app.patientName}`);
+  closeModal();
+  showToast(`Depósito de ${formatMoney(deposit)} confirmado para ${app.patientName}.`);
   renderWorkspace();
+}
+
+function confirmWithoutDeposit(appointmentId) {
+  const app = state.appointments.find(a => a.id === appointmentId);
+  if (!app || app.status !== 'Pendiente Depósito') return;
+  app.depositPaid = 0;
+  app.paymentMode = 'al-finalizar';
+  app.status = 'Confirmada';
+  saveState();
+  closeModal();
+  showToast(`Cita de ${app.patientName} confirmada sin depósito. Paga ${formatMoney(app.price)} al finalizar.`);
+  renderWorkspace();
+}
+
+// Completar la sesión: se cobra lo que falta (o el total si no hubo depósito)
+function openCompleteSessionModal(appointmentId) {
+  const app = state.appointments.find(a => a.id === appointmentId);
+  if (!app || app.status === 'Completada' || app.status === 'Cancelada') return;
+  const due = Math.max(0, Number(app.price) - Number(app.depositPaid || 0));
+  openModalWithHTML(
+    `Completar sesión y cobrar`,
+    `
+      <ul class="team-credentials">
+        <li><span>Clienta</span><strong style="font-family:inherit;">${escapeHTML(app.patientName)}</strong></li>
+        <li><span>Tratamiento</span><strong style="font-family:inherit;">${escapeHTML(app.treatmentName)}</strong></li>
+        <li><span>Precio</span><strong style="font-family:inherit;">${formatMoney(app.price)}</strong></li>
+        <li><span>${isPayAtEnd(app) ? 'Depósito' : 'Depósito pagado'}</span><strong style="font-family:inherit;">${isPayAtEnd(app) ? 'Sin depósito' : formatMoney(app.depositPaid)}</strong></li>
+      </ul>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mFinalAmount">${isPayAtEnd(app) ? 'Total a cobrar' : 'Resto a cobrar'}</label>
+          <input id="mFinalAmount" type="number" min="0" class="form-control" value="${escapeHTML(due)}">
+        </div>
+        <div class="form-group">
+          <label for="mFinalMethod">Método de pago</label>
+          <select id="mFinalMethod" class="form-control">${paymentMethodOptions('Efectivo')}</select>
+        </div>
+      </div>
+      <p class="admin-gate-hint" style="text-align:left;">Al completar se registra el cobro en Finanzas, se descuentan los insumos de cabina y se agrega la sesión al expediente.</p>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" onclick="completeAppointmentSession('${escapeHTML(app.id)}')">Cobrar y completar</button>
+    `
+  );
 }
 
 function completeAppointmentSession(appointmentId) {
   const app = state.appointments.find(a => a.id === appointmentId);
   if (!app || app.status === 'Completada' || app.status === 'Cancelada') return;
 
+  const amountInput = document.getElementById('mFinalAmount');
+  const remainingAmount = amountInput
+    ? Math.max(0, Number(amountInput.value) || 0)
+    : Math.max(0, Number(app.price) - Number(app.depositPaid || 0));
+  const method = document.getElementById('mFinalMethod')?.value || 'Efectivo';
+
   app.status = 'Completada';
-  const remainingAmount = Math.max(0, Number(app.price) - Number(app.depositPaid || 0));
+  app.finalPaid = remainingAmount;
 
   if (remainingAmount > 0) {
     state.finances.unshift({
       id: 'fin-' + Date.now(),
       date: app.date,
-      concept: `Liquidación Sesión ${app.treatmentName} — ${app.patientName}`,
+      concept: `${isPayAtEnd(app) ? 'Pago total al finalizar' : 'Liquidación'} — ${app.treatmentName} — ${app.patientName}`,
       category: 'Servicio en Cabina',
       type: 'Ingreso',
-      method: 'Tarjeta / POS',
+      method,
       amount: remainingAmount
     });
   }
@@ -1746,7 +1868,10 @@ function completeAppointmentSession(appointmentId) {
   }
 
   saveState();
-  showToast(`Sesión completada: insumos descontados e ingreso registrado en Finanzas.`);
+  closeModal();
+  showToast(remainingAmount > 0
+    ? `Sesión completada. Cobro de ${formatMoney(remainingAmount)} registrado en Finanzas.`
+    : 'Sesión completada.');
   renderWorkspace();
 }
 
@@ -2633,20 +2758,16 @@ function openAppointmentModal(preselectedTreatmentId) {
         <div class="form-group">
           <label>Hora</label>
           <select id="mAppTime" class="form-control">
-            <option>09:00 AM</option>
-            <option>10:00 AM</option>
-            <option>11:30 AM</option>
-            <option>02:30 PM</option>
-            <option>04:00 PM</option>
-            <option>05:30 PM</option>
+            ${(studioSettings().slots || ['09:00 AM', '10:00 AM', '11:30 AM', '02:30 PM', '04:00 PM', '05:30 PM']).map(slot => `<option>${escapeHTML(slot)}</option>`).join('')}
           </select>
         </div>
       </div>
       <div class="form-group">
         <label>Estado del Depósito</label>
         <select id="mAppStatus" class="form-control">
-          <option value="Confirmada">Confirmada (Con depósito pagado)</option>
-          <option value="Pendiente Depósito">Pendiente de Depósito</option>
+          <option value="Confirmada">Confirmada (con depósito pagado)</option>
+          <option value="Confirmada-sin-deposito">Confirmada sin depósito (paga al finalizar)</option>
+          <option value="Pendiente Depósito">Pendiente de depósito</option>
         </select>
       </div>
     `,
@@ -2663,14 +2784,16 @@ function saveNewAppointment() {
   const espId = document.getElementById('mAppSpecialist').value;
   const date = document.getElementById('mAppDate').value;
   const time = document.getElementById('mAppTime').value;
-  const status = document.getElementById('mAppStatus').value;
+  const statusChoice = document.getElementById('mAppStatus').value;
+  const payAtEnd = statusChoice === 'Confirmada-sin-deposito';
+  const status = payAtEnd ? 'Confirmada' : statusChoice;
 
   const pat = state.patients.find(p => p.id === patId);
   const trat = state.treatments.find(t => t.id === tratId);
   const esp = state.specialists.find(s => s.id === espId);
   if (!pat || !trat || !esp) return;
 
-  const deposit = status === 'Confirmada' ? trat.depositRequired : 0;
+  const deposit = status === 'Confirmada' && !payAtEnd ? trat.depositRequired : 0;
 
   state.appointments.unshift({
     id: 'cita-' + Date.now(),
@@ -2686,6 +2809,7 @@ function saveNewAppointment() {
     time,
     price: trat.price,
     depositPaid: deposit,
+    paymentMode: payAtEnd ? 'al-finalizar' : 'deposito',
     status
   });
 

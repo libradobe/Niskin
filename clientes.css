@@ -644,6 +644,13 @@
   gap: 12px;
 }
 
+.cp-pay-note {
+  margin-top: 4px;
+  font-size: 0.78rem !important;
+  color: var(--gold-hover) !important;
+  font-weight: 600;
+}
+
 .cp-appt-buttons {
   display: inline-flex;
   gap: 6px;

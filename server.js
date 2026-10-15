@@ -217,6 +217,7 @@ function toPublicSettings(st) {
     welcomeMessage: st.welcomeMessage,
     depositInstructions: st.depositInstructions,
     cancellationPolicy: st.cancellationPolicy,
+    requireDeposit: st.requireDeposit !== false,
     bookingEnabled: st.bookingEnabled !== false
   };
 }
@@ -290,6 +291,8 @@ function toClientAppointment(a) {
     time: a.time,
     price: a.price,
     depositPaid: a.depositPaid,
+    paymentMode: a.paymentMode || 'deposito',
+    finalPaid: a.finalPaid || 0,
     status: a.status
   };
 }
@@ -660,7 +663,7 @@ async function notifyStateChanges(prevAppointments, appointments, prevInventory,
     }
     if (prev.status !== a.status) {
       const messages = {
-        'Confirmada': ['¡Tu cita está confirmada! ✨', `${a.treatmentName} • ${when}. Te esperamos.`],
+        'Confirmada': ['¡Tu cita está confirmada! ✨', `${a.treatmentName} • ${when}.${a.paymentMode === 'al-finalizar' ? ' Pagas el total al finalizar tu sesión.' : ''} Te esperamos.`],
         'Cancelada': ['Tu cita fue cancelada', `${a.treatmentName} del ${when}. Escríbenos para reprogramar.`],
         'Completada': [`Gracias por visitarnos 💛`, `Ya puedes ver tu sesión de ${a.treatmentName} en "Mi piel".`]
       };
@@ -787,6 +790,7 @@ app.put('/api/admin/settings', requireAdmin, requireStaffManager, requireMongo, 
   }
   if (body.whatsapp !== undefined) update.whatsapp = String(body.whatsapp || '').replace(/[^\d+]/g, '').slice(0, 16);
   if (body.bookingEnabled !== undefined) update.bookingEnabled = Boolean(body.bookingEnabled);
+  if (body.requireDeposit !== undefined) update.requireDeposit = Boolean(body.requireDeposit);
   if (body.remindersEnabled !== undefined) update.remindersEnabled = Boolean(body.remindersEnabled);
   if (body.minHoursNotice !== undefined) update.minHoursNotice = clampInt(body.minHoursNotice, 0, 72, current.minHoursNotice);
   if (body.maxDaysAhead !== undefined) update.maxDaysAhead = clampInt(body.maxDaysAhead, 1, 365, current.maxDaysAhead);
@@ -1081,6 +1085,10 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       return res.status(409).json({ status: 'error', message: 'Alguien acaba de reservar ese horario. Elige otro.' });
     }
 
+    // Sin depósito (desactivado en Configuración o tratamiento sin depósito): la cita queda
+    // confirmada y la clienta paga el total al finalizar la sesión
+    const needsDeposit = st.requireDeposit !== false && Number(treatment.depositRequired) > 0;
+
     const appointment = await Appointment.create({
       id: `cita-web-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
       patientId: patient.id,
@@ -1095,18 +1103,19 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       time,
       price: treatment.price,
       depositPaid: 0,
-      status: 'Pendiente Depósito'
+      paymentMode: needsDeposit ? 'deposito' : 'al-finalizar',
+      status: needsDeposit ? 'Pendiente Depósito' : 'Confirmada'
     });
 
     res.status(201).json({
       status: 'ok',
       appointment: toClientAppointment(appointment.toObject()),
-      depositRequired: treatment.depositRequired
+      depositRequired: needsDeposit ? treatment.depositRequired : 0
     });
 
     notify.notifyStaff({
-      title: 'Nueva cita reservada 📅',
-      body: `${patient.name} • ${treatment.name} • ${formatDateEs(date)} a las ${time} con ${specialist.name}. Pendiente de depósito.`,
+      title: needsDeposit ? 'Nueva cita reservada 📅' : 'Nueva cita confirmada 📅',
+      body: `${patient.name} • ${treatment.name} • ${formatDateEs(date)} a las ${time} con ${specialist.name}. ${needsDeposit ? 'Pendiente de depósito.' : 'Paga al finalizar.'}`,
       tag: `cita-${appointment.id}`,
       url: './?vista=agenda'
     }, { specialistId: specialist.id });

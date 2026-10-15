@@ -1629,6 +1629,21 @@ select.form-control,
   max-width: 170px;
 }
 
+/* Confirmar cita: con o sin depósito */
+.confirm-option {
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #FCFAF6;
+}
+
+.confirm-option h4 {
+  font-size: 0.95rem;
+}
+
 /* Configuración del negocio */
 .settings-grid {
   display: grid;
