@@ -46,7 +46,8 @@ const PatientSchema = new mongoose.Schema({
   },
   beforePhoto: { type: String, default: '' },
   afterPhoto: { type: String, default: '' },
-  sessions: { type: [SessionSchema], default: [] }
+  sessions: { type: [SessionSchema], default: [] },
+  source: { type: String, default: 'Estudio' }
 }, { timestamps: true });
 
 // 2. Esquema de Citas (Agenda Administrativa y Reservas desde el Portal de Clientes)
@@ -116,11 +117,23 @@ const SpecialistSchema = new mongoose.Schema({
   initials: { type: String, default: 'VN' }
 }, { timestamps: true });
 
+// 7. Cuentas de acceso de clientas (portal web). Colección separada del expediente:
+//    nunca se envía al panel admin ni a otras clientas.
+const ClientAccountSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  patientId: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  passwordHash: { type: String, required: true },
+  passwordSalt: { type: String, required: true },
+  lastLoginAt: { type: Date }
+}, { timestamps: true });
+
 module.exports = {
   Patient: mongoose.model('Patient', PatientSchema),
   Appointment: mongoose.model('Appointment', AppointmentSchema),
   Inventory: mongoose.model('Inventory', InventorySchema),
   Finance: mongoose.model('Finance', FinanceSchema),
   Treatment: mongoose.model('Treatment', TreatmentSchema),
-  Specialist: mongoose.model('Specialist', SpecialistSchema)
+  Specialist: mongoose.model('Specialist', SpecialistSchema),
+  ClientAccount: mongoose.model('ClientAccount', ClientAccountSchema)
 };

@@ -1,8 +1,32 @@
 const STORAGE_KEY = 'niskin_studio_state_v1';
 const RENDER_URL_STORAGE_KEY = 'niskin_render_backend_url';
+const ADMIN_TOKEN_KEY = 'niskin_admin_token';
+
+function getAdminToken() {
+  try {
+    return localStorage.getItem(ADMIN_TOKEN_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function authHeaders(extra = {}) {
+  const token = getAdminToken();
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
+
+function toISODate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const TODAY = new Date();
+const TODAY_ISO = toISODate(TODAY);
 
 function getRenderBaseUrl() {
-  const saved = localStorage.getItem(RENDER_URL_STORAGE_KEY);
+  let saved = null;
+  try {
+    saved = localStorage.getItem(RENDER_URL_STORAGE_KEY);
+  } catch (e) {}
   const base = saved !== null ? saved : (window.NISKIN_RENDER_URL || '');
   return base.trim().replace(/\/+$/, '');
 }
@@ -16,9 +40,9 @@ let state = loadState();
 
 let uiState = {
   currentView: 'dashboard',
-  selectedDate: '2026-10-14',
-  calendarMonth: 9,
-  calendarYear: 2026,
+  selectedDate: TODAY_ISO,
+  calendarMonth: TODAY.getMonth(),
+  calendarYear: TODAY.getFullYear(),
   selectedPatientId: state.patients[0]?.id || 'pac-1',
   searchQuery: '',
   agendaFilterStatus: 'Todas',
@@ -31,7 +55,7 @@ let uiState = {
   portalTab: 'booking',
   portalSelectedSpecialistId: state.specialists[0]?.id || 'esp-1',
   portalSelectedTreatmentId: state.treatments[1]?.id || 'trat-2',
-  portalSelectedDate: '2026-10-21',
+  portalSelectedDate: toISODate(new Date(TODAY.getTime() + 7 * 24 * 60 * 60 * 1000)),
   portalSelectedSlot: '02:30 PM'
 };
 
@@ -54,33 +78,41 @@ function saveState() {
     console.warn('Error guardando estado en localStorage:', e);
   }
 
-  // Sincronización con el Backend en Render + MongoDB Atlas
-  const endpoint = getApiEndpoint('/api/state');
-  if (getRenderBaseUrl() || window.location.protocol.startsWith('http')) {
-    fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state })
+  // Sincronización con el Backend en Render + MongoDB Atlas (solo con sesión de administradora)
+  if (!getAdminToken()) return;
+  fetch(getApiEndpoint('/api/state'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ state })
+  })
+    .then(res => {
+      if (res.status === 401) {
+        showAdminGate('Tu sesión expiró. Vuelve a ingresar para guardar los cambios.');
+        return null;
+      }
+      return res.json();
     })
-      .then(res => res.json())
-      .then(resp => {
-        if (resp && resp.status === 'ok') {
-          uiState.serverSynced = true;
-          uiState.backendLabel = 'Conectado a Render + MongoDB';
-        }
-      })
-      .catch(() => {
-        // Permanece respaldado en localStorage mientras el servidor Render despierta
-      });
-  }
+    .then(resp => {
+      if (resp && resp.status === 'ok') {
+        uiState.serverSynced = true;
+        uiState.backendLabel = 'Conectado a Render + MongoDB';
+      }
+    })
+    .catch(() => {
+      // Permanece respaldado en localStorage mientras el servidor Render despierta
+      showToast('Sin conexión con el servidor: los cambios quedan guardados en este dispositivo.');
+    });
 }
 
 async function syncFromCloudServer() {
-  const endpoint = getApiEndpoint('/api/state');
-  if (!getRenderBaseUrl() && !window.location.protocol.startsWith('http')) return;
+  if (!getAdminToken()) return;
 
   try {
-    const res = await fetch(endpoint, { cache: 'no-store' });
+    const res = await fetch(getApiEndpoint('/api/state'), { cache: 'no-store', headers: authHeaders() });
+    if (res.status === 401) {
+      showAdminGate('Tu sesión expiró. Ingresa de nuevo.');
+      return;
+    }
     if (res.ok) {
       const payload = await res.json();
       if (payload && payload.status === 'ok') {
@@ -88,8 +120,13 @@ async function syncFromCloudServer() {
         uiState.backendLabel = 'Conectado a Render + MongoDB';
         if (payload.hasServerData && payload.data) {
           state = payload.data;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-          renderWorkspace();
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          } catch (e) {}
+          // No re-renderizar mientras hay un formulario abierto
+          if (!document.getElementById('modalBackdrop')?.classList.contains('open')) {
+            renderWorkspace();
+          }
         } else {
           // Si la base de datos MongoDB en Render está vacía, siembra el catálogo inicial de Niskin
           saveState();
@@ -157,6 +194,83 @@ function saveRenderUrlConfig() {
   renderWorkspace();
 }
 
+// ============================================================================
+// ACCESO AL PANEL ADMINISTRATIVO
+// ============================================================================
+function showAdminGate(message) {
+  try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch (e) {}
+  document.body.classList.add('admin-locked');
+  const workspace = document.getElementById('workspaceContent');
+  if (workspace) workspace.innerHTML = '';
+  const msg = document.getElementById('adminGateMessage');
+  if (msg) {
+    msg.textContent = message || '';
+    msg.hidden = !message;
+  }
+  setTimeout(() => document.getElementById('adminPasswordInput')?.focus(), 50);
+}
+
+function hideAdminGate() {
+  document.body.classList.remove('admin-locked');
+}
+
+async function submitAdminLogin(event) {
+  event.preventDefault();
+  const input = document.getElementById('adminPasswordInput');
+  const button = document.getElementById('adminLoginBtn');
+  const msg = document.getElementById('adminGateMessage');
+  const password = input.value;
+  if (!password) return;
+
+  button.disabled = true;
+  button.textContent = 'Verificando…';
+  msg.hidden = true;
+  const slowTimer = setTimeout(() => {
+    msg.textContent = 'Despertando el servidor… puede tardar hasta un minuto la primera vez.';
+    msg.hidden = false;
+  }, 4000);
+
+  try {
+    const res = await fetch(getApiEndpoint('/api/admin/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.token) {
+      throw new Error(data.message || 'No se pudo iniciar sesión.');
+    }
+    localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+    input.value = '';
+    hideAdminGate();
+    switchView(uiState.currentView || 'dashboard');
+    await syncFromCloudServer();
+    showToast('Bienvenida al panel de Niskin Beauty Studio.');
+  } catch (err) {
+    msg.textContent = err.message === 'Failed to fetch'
+      ? 'No se pudo conectar con el servidor. Revisa tu conexión o la URL del servidor.'
+      : err.message;
+    msg.hidden = false;
+  } finally {
+    clearTimeout(slowTimer);
+    button.disabled = false;
+    button.textContent = 'Entrar al panel';
+  }
+}
+
+function adminLogout() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {}
+  state = JSON.parse(JSON.stringify(INITIAL_NISKIN_DATA));
+  uiState.serverSynced = false;
+  closeModal();
+  toggleMobileMenu(false);
+  showAdminGate('Sesión cerrada.');
+}
+
 function formatMoney(amount) {
   return `RD$ ${Number(amount || 0).toLocaleString('es-DO')}`;
 }
@@ -183,6 +297,29 @@ function getInitials(name) {
 }
 
 const PASTEL_CLASSES = ['pastel-rose', 'pastel-sage', 'pastel-lavender', 'pastel-amber', 'pastel-blue'];
+
+// Las clientas registradas en la web aún no tienen fotos: se muestra una ilustración neutra
+// (solo en pantalla, no se guarda en el expediente)
+const photoPlaceholderCache = {};
+function patientPhoto(patient, mode) {
+  const stored = mode === 'before' ? patient.beforePhoto : patient.afterPhoto;
+  if (stored) return stored;
+  const key = `${patient.id}-${mode}`;
+  if (!photoPlaceholderCache[key]) {
+    photoPlaceholderCache[key] = createSkinVisualSVG({
+      mode,
+      clientName: patient.name,
+      sessionLabel: mode === 'before' ? 'Sin foto inicial' : 'Sin foto de progreso',
+      dateLabel: '',
+      conditionType: 'hydration'
+    });
+  }
+  return photoPlaceholderCache[key];
+}
+
+function formatAge(age) {
+  return age ? `${age} años` : 'edad por registrar';
+}
 
 // ============================================================================
 // NAVEGACIÓN PRINCIPAL
@@ -268,6 +405,9 @@ function renderWorkspace() {
 function renderDashboardView() {
   const todayAppointments = state.appointments.filter(a => a.date === uiState.selectedDate);
   const confirmedCount = state.appointments.filter(a => a.status === 'Confirmada' || a.status === 'Completada').length;
+  const pendingDeposits = state.appointments
+    .filter(a => a.status === 'Pendiente Depósito')
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   const occupancyPct = Math.min(100, Math.round((todayAppointments.length / 6) * 100));
 
   const totalIncome = state.finances
@@ -402,22 +542,19 @@ function renderDashboardView() {
                 <button class="btn-soft btn-sm" onclick="restockItem('${item.id}', 5)">+5</button>
               </div>
             `).join('')}
-            <div class="mini-feed-item">
-              <span class="pastel-avatar pastel-sage">📸</span>
-              <div class="entity-text" style="flex:1;">
-                <h4>Fotos de Mejoría Actualizadas</h4>
-                <p>Valeria Méndez (92% mejoría en textura y acné)</p>
+            ${pendingDeposits.slice(0, 4).map(app => `
+              <div class="mini-feed-item">
+                <span class="pastel-avatar pastel-rose">💳</span>
+                <div class="entity-text" style="flex:1;min-width:0;">
+                  <h4>Depósito pendiente • ${app.patientName}</h4>
+                  <p>${app.treatmentName} • ${app.date} (${app.time})</p>
+                </div>
+                <button class="btn-soft btn-sm" onclick="confirmAppointmentDeposit('${app.id}')">Confirmar</button>
               </div>
-              <button class="btn-soft btn-sm" onclick="openPatientRecord('pac-1')">Ver</button>
-            </div>
-            <div class="mini-feed-item">
-              <span class="pastel-avatar pastel-rose">💳</span>
-              <div class="entity-text" style="flex:1;">
-                <h4>Depósito Pendiente de Confirmar</h4>
-                <p>Mariela Gómez • HydraGlow (02:30 PM)</p>
-              </div>
-              <button class="btn-soft btn-sm" onclick="confirmAppointmentDeposit('cita-3')">Confirmar</button>
-            </div>
+            `).join('')}
+            ${!pendingDeposits.length && !lowStockItems.length ? `
+              <p style="font-size:0.84rem;color:var(--text-secondary);">Todo al día: sin depósitos pendientes ni alertas de stock.</p>
+            ` : ''}
           </div>
         </div>
       </div>
@@ -427,7 +564,8 @@ function renderDashboardView() {
 
 function renderAppointmentRow(app) {
   const isSuccess = app.status === 'Confirmada' || app.status === 'Completada';
-  const badgeClass = isSuccess ? 'status-confirmed' : 'status-pending';
+  const isCancelled = app.status === 'Cancelada';
+  const badgeClass = isCancelled ? 'status-danger' : (isSuccess ? 'status-confirmed' : 'status-pending');
 
   return `
     <div class="list-row">
@@ -459,7 +597,12 @@ function renderAppointmentRow(app) {
         <button class="round-action-btn" title="Ver Expediente y Fotos de Mejoría" onclick="openPatientRecord('${app.patientId}')">
           📋
         </button>
-        ${app.status !== 'Completada' ? `
+        ${app.status === 'Pendiente Depósito' ? `
+          <button class="round-action-btn" title="Confirmar depósito recibido" onclick="confirmAppointmentDeposit('${app.id}')">
+            💳
+          </button>
+        ` : ''}
+        ${app.status !== 'Completada' && !isCancelled ? `
           <button class="round-action-btn" title="Completar sesión, descontar insumos y registrar ingreso" onclick="completeAppointmentSession('${app.id}')">
             ✓
           </button>
@@ -549,7 +692,7 @@ function selectPortalDate(dateStr) {
 // 2. VISTA AGENDA Y CITAS
 // ============================================================================
 function renderAgendaView() {
-  const statuses = ['Todas', 'Confirmada', 'Pendiente Depósito', 'Completada'];
+  const statuses = ['Todas', 'Confirmada', 'Pendiente Depósito', 'Completada', 'Cancelada'];
   const filtered = state.appointments.filter(a => {
     const matchStatus = uiState.agendaFilterStatus === 'Todas' || a.status === uiState.agendaFilterStatus;
     const matchSearch = !uiState.searchQuery ||
@@ -604,7 +747,7 @@ function setAgendaFilter(status) {
 
 function confirmAppointmentDeposit(appointmentId) {
   const app = state.appointments.find(a => a.id === appointmentId);
-  if (!app) return;
+  if (!app || app.status !== 'Pendiente Depósito') return;
   const treatment = state.treatments.find(t => t.id === app.treatmentId);
   const deposit = treatment ? treatment.depositRequired : 1000;
   app.depositPaid = deposit;
@@ -627,7 +770,7 @@ function confirmAppointmentDeposit(appointmentId) {
 
 function completeAppointmentSession(appointmentId) {
   const app = state.appointments.find(a => a.id === appointmentId);
-  if (!app || app.status === 'Completada') return;
+  if (!app || app.status === 'Completada' || app.status === 'Cancelada') return;
 
   app.status = 'Completada';
   const remainingAmount = Math.max(0, Number(app.price) - Number(app.depositPaid || 0));
@@ -729,7 +872,7 @@ function renderPatientsView() {
           <div style="display:flex;align-items:center;gap:16px;">
             <div class="pastel-avatar ${p.pastelClass}" style="width:56px;height:56px;font-size:1.15rem;">${p.initials}</div>
             <div>
-              <h2 style="font-family:var(--font-serif);font-size:1.65rem;">${p.name} (${p.age} años)</h2>
+              <h2 style="font-family:var(--font-serif);font-size:1.65rem;">${p.name} (${formatAge(p.age)})</h2>
               <p style="font-size:0.84rem;color:var(--text-secondary);">📞 ${p.phone} • ✉️ ${p.email}</p>
               <div class="skin-badges">
                 <span class="skin-tag">✨ ${p.skinBiotype}</span>
@@ -767,10 +910,10 @@ function renderPatientsView() {
             <div class="ba-section-grid">
               <div class="ba-slider-container" data-ba-slider>
                 <div class="ba-img-layer">
-                  <img src="${p.afterPhoto}" alt="Después - ${p.name}">
+                  <img src="${patientPhoto(p, 'after')}" alt="Después - ${p.name}">
                 </div>
                 <div class="ba-before-clip" data-ba-clip style="width: 50%;">
-                  <img src="${p.beforePhoto}" alt="Antes - ${p.name}" style="width: 100%; height: 100%; object-fit: cover;">
+                  <img src="${patientPhoto(p, 'before')}" alt="Antes - ${p.name}" style="width: 100%; height: 100%; object-fit: cover;">
                 </div>
                 <span class="ba-label ba-label-before">Antes (Sesión 1)</span>
                 <span class="ba-label ba-label-after">Después (Actual)</span>
@@ -1336,10 +1479,10 @@ function renderClientPortalView() {
             <div style="display:flex;flex-direction:column;gap:14px;">
               <div class="ba-slider-container" data-ba-slider style="height:220px;">
                 <div class="ba-img-layer">
-                  <img src="${client.afterPhoto}" alt="Después">
+                  <img src="${patientPhoto(client, 'after')}" alt="Después">
                 </div>
                 <div class="ba-before-clip" data-ba-clip style="width:50%;">
-                  <img src="${client.beforePhoto}" alt="Antes" style="width:100%;height:100%;object-fit:cover;">
+                  <img src="${patientPhoto(client, 'before')}" alt="Antes" style="width:100%;height:100%;object-fit:cover;">
                 </div>
                 <span class="ba-label ba-label-before">Antes</span>
                 <span class="ba-label ba-label-after">Ahora</span>
@@ -1385,10 +1528,10 @@ function renderClientPortalView() {
             <div class="ba-section-grid">
               <div class="ba-slider-container" data-ba-slider>
                 <div class="ba-img-layer">
-                  <img src="${client.afterPhoto}" alt="Después - ${client.name}">
+                  <img src="${patientPhoto(client, 'after')}" alt="Después - ${client.name}">
                 </div>
                 <div class="ba-before-clip" data-ba-clip style="width: 50%;">
-                  <img src="${client.beforePhoto}" alt="Antes - ${client.name}" style="width:100%;height:100%;object-fit:cover;">
+                  <img src="${patientPhoto(client, 'before')}" alt="Antes - ${client.name}" style="width:100%;height:100%;object-fit:cover;">
                 </div>
                 <span class="ba-label ba-label-before">Sesión 1 (Antes)</span>
                 <span class="ba-label ba-label-after">Actualidad (Después)</span>
@@ -2055,6 +2198,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Sin sesión de administradora no se muestran datos (y se borra cualquier copia local previa)
+  if (!getAdminToken()) {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
+    state = JSON.parse(JSON.stringify(INITIAL_NISKIN_DATA));
+    showAdminGate();
+    return;
+  }
+
   const params = new URLSearchParams(window.location.search);
   const requestedView = params.get('vista');
   if (requestedView === 'cliente' || window.location.hash === '#cliente') {
@@ -2066,3 +2219,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Sincroniza automáticamente el Frontend en Hostinger con el Backend en Render + MongoDB
   syncFromCloudServer();
 });
+
+// Trae citas nuevas de clientas al volver a la pestaña y cada 2 minutos
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') syncFromCloudServer();
+});
+setInterval(() => {
+  if (document.visibilityState === 'visible') syncFromCloudServer();
+}, 2 * 60 * 1000);

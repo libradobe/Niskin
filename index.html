@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261014c">
 </head>
 <body>
   <div class="app-layout">
@@ -83,8 +83,16 @@
               <span class="nav-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
               </span>
-              <span>Portal del Cliente</span>
+              <span>Vista previa del Portal</span>
             </button>
+          </li>
+          <li>
+            <a class="nav-item" href="clientes.html" target="_blank" rel="noopener">
+              <span class="nav-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+              </span>
+              <span>Página de Clientas</span>
+            </a>
           </li>
         </ul>
       </div>
@@ -95,6 +103,9 @@
           <h4>Lic. Valeria Niskin</h4>
           <p>Cosmetóloga Principal</p>
         </div>
+        <button class="round-action-btn logout-btn" onclick="adminLogout()" title="Cerrar sesión" aria-label="Cerrar sesión">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </aside>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu(false)"></div>
@@ -146,6 +157,23 @@
     </div>
   </div>
 
+  <!-- ACCESO AL PANEL (los datos del estudio solo se cargan con contraseña) -->
+  <div id="adminGate" class="admin-gate" role="dialog" aria-modal="true" aria-labelledby="adminGateTitle">
+    <form class="admin-gate-card" onsubmit="submitAdminLogin(event)">
+      <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="admin-gate-logo">
+      <h1 id="adminGateTitle">Panel del Estudio</h1>
+      <p class="admin-gate-sub">Acceso exclusivo para el equipo de Niskin Beauty Studio.</p>
+      <div class="form-group">
+        <label for="adminPasswordInput">Contraseña</label>
+        <input type="password" id="adminPasswordInput" class="form-control" autocomplete="current-password" required>
+      </div>
+      <p id="adminGateMessage" class="form-message" role="alert" hidden></p>
+      <button type="submit" id="adminLoginBtn" class="btn-gold btn-block">Entrar al panel</button>
+      <a class="admin-gate-link" href="clientes.html">¿Eres clienta? Agenda tu cita aquí →</a>
+      <button type="button" class="admin-gate-config" onclick="openRenderConfigModal()">Configurar servidor</button>
+    </form>
+  </div>
+
   <!-- MODAL REUTILIZABLE -->
   <div id="modalBackdrop" class="modal-backdrop">
     <div class="modal-box">
@@ -161,8 +189,8 @@
   <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="config.js"></script>
-  <script src="data.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=20261014c"></script>
+  <script src="data.js?v=20261014c"></script>
+  <script src="app.js?v=20261014c"></script>
 </body>
 </html>
