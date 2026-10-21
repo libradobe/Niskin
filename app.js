@@ -835,7 +835,8 @@ function sendPatientWhatsApp(patientId) {
 // ELIMINAR CLIENTAS, CITAS Y TRATAMIENTOS
 // ============================================================================
 function canDelete(kind) {
-  return kind === 'appointment' ? Boolean(getAdminToken()) : isStaffManager();
+  // Clientas (expedientes): solo administradoras. Citas y tratamientos: todo el equipo.
+  return kind === 'patient' ? isStaffManager() : Boolean(getAdminToken());
 }
 
 function persistLocalState() {
@@ -2541,29 +2542,39 @@ function renderTreatmentsView() {
       </button>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:20px;">
-      ${state.treatments.map(t => `
-        <div class="surface-card" style="padding:22px;display:flex;flex-direction:column;justify-content:space-between;gap:14px;">
+    <div class="treatment-grid">
+      ${state.treatments.length ? state.treatments.map(t => `
+        <article class="surface-card treatment-card">
           <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <span class="skin-tag">${t.category}</span>
-              <span style="font-size:0.82rem;color:var(--text-secondary);">⏱ ${t.durationMin} min</span>
+            <div class="treatment-card-top">
+              <span class="skin-tag">${escapeHTML(t.category)}</span>
+              <span class="treatment-duration">⏱ ${escapeHTML(t.durationMin)} min</span>
             </div>
-            <h3 style="font-family:var(--font-serif);font-size:1.35rem;margin-bottom:6px;">${t.name}</h3>
-            <p style="font-size:0.84rem;color:var(--text-secondary);margin-bottom:12px;">${t.description}</p>
+            <h3>${escapeHTML(t.name)}</h3>
+            ${t.description ? `<p class="treatment-desc">${escapeHTML(t.description)}</p>` : ''}
+            ${(t.suppliesUsed || []).length ? `<p class="treatment-supplies">Insumos por sesión: ${(t.suppliesUsed || []).map(u => escapeHTML(state.inventory.find(i => i.id === u.inventoryId)?.name || 'insumo')).join(', ')}</p>` : ''}
           </div>
-          <div style="border-top:1px solid var(--border-light);padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+          <div class="treatment-card-foot">
             <div>
-              <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);">${formatMoney(t.price)}</div>
-              <div style="font-size:0.76rem;color:var(--gold-hover);">${depositForTreatment(t) ? `Depósito reserva: ${formatMoney(depositForTreatment(t))}` : 'Sin depósito • paga al finalizar'}</div>
+              <div class="treatment-price">${formatMoney(t.price)}</div>
+              <div class="treatment-deposit">${depositForTreatment(t) ? `Depósito reserva: ${formatMoney(depositForTreatment(t))}` : 'Sin depósito • paga al finalizar'}</div>
             </div>
-            <div style="display:flex;gap:6px;">
-              ${isStaffManager() ? `<button class="btn-soft btn-sm danger-soft" onclick="askDelete('treatment', '${t.id}')" aria-label="Eliminar ${escapeHTML(t.name)}">Eliminar</button>` : ''}
-              <button class="btn-soft btn-sm" onclick="openAppointmentModal('${t.id}')">Agendar</button>
+            <div class="treatment-actions">
+              <button class="round-action-btn" title="Editar" aria-label="Editar ${escapeHTML(t.name)}" onclick="openTreatmentModal('${escapeHTML(t.id)}')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+              <button class="round-action-btn danger-btn" title="Eliminar" aria-label="Eliminar ${escapeHTML(t.name)}" onclick="askDelete('treatment', '${escapeHTML(t.id)}')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+              </button>
+              <button class="btn-soft btn-sm" onclick="openAppointmentModal('${escapeHTML(t.id)}')">Agendar</button>
             </div>
           </div>
+        </article>
+      `).join('') : `
+        <div class="surface-card" style="padding:28px;text-align:center;color:var(--text-secondary);grid-column:1/-1;">
+          Aún no hay tratamientos. Crea el primero con <strong>Nuevo Protocolo / Tratamiento</strong>.
         </div>
-      `).join('')}
+      `}
     </div>
   `;
 }
@@ -3464,61 +3475,122 @@ function saveNewInventoryItem() {
 }
 
 function openNewTreatmentModal() {
+  openTreatmentModal(null);
+}
+
+// Crear o editar un protocolo/tratamiento del catálogo
+function openTreatmentModal(treatmentId) {
+  const t = treatmentId ? state.treatments.find(x => x.id === treatmentId) : null;
+  if (treatmentId && !t) return;
+  const symbol = currentCurrency().symbol;
+  const supplies = new Map((t?.suppliesUsed || []).map(u => [u.inventoryId, u.qty]));
+  const depositType = uiState.settings?.depositType || 'treatment';
+  const depositHint = uiState.settings?.requireDeposit === false
+    ? 'Ahora mismo no se cobra depósito (Configuración → Cobro de la reservación).'
+    : depositType !== 'treatment'
+      ? `Ahora mismo el depósito se calcula como ${depositType === 'fixed' ? 'monto fijo' : 'porcentaje del precio'} en Configuración; este valor se usará si eliges "el de cada tratamiento".`
+      : 'Se cobra al reservar en línea.';
+
   openModalWithHTML(
-    'Agregar Nuevo Protocolo al Catálogo Niskin',
+    t ? `Editar — ${t.name}` : 'Nuevo protocolo / tratamiento',
     `
       <div class="form-group">
-        <label>Nombre del Tratamiento</label>
-        <input type="text" id="mTratName" class="form-control" placeholder="Ej. Radiofrecuencia Fraccionada + Velo de Colágeno">
+        <label for="mTratName">Nombre del tratamiento</label>
+        <input type="text" id="mTratName" class="form-control" maxlength="120" value="${escapeHTML(t?.name || '')}" placeholder="Ej. Radiofrecuencia Fraccionada + Velo de Colágeno">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Categoría</label>
-          <input type="text" id="mTratCat" class="form-control" value="Rejuvenecimiento & Lifting">
+          <label for="mTratCat">Categoría</label>
+          <input type="text" id="mTratCat" class="form-control" maxlength="60" value="${escapeHTML(t?.category || 'Protocolo Facial')}">
         </div>
         <div class="form-group">
-          <label>Duración (Minutos)</label>
-          <input type="number" id="mTratDur" class="form-control" value="60">
+          <label for="mTratDur">Duración (minutos)</label>
+          <input type="number" id="mTratDur" class="form-control" min="10" max="480" step="5" value="${escapeHTML(t?.durationMin || 60)}">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Precio de Sesión (RD$)</label>
-          <input type="number" id="mTratPrice" class="form-control" value="3800">
+          <label for="mTratPrice">Precio de la sesión (${escapeHTML(symbol)})</label>
+          <input type="number" id="mTratPrice" class="form-control" min="0" value="${escapeHTML(t?.price ?? 3000)}">
         </div>
         <div class="form-group">
-          <label>Depósito Requerido (RD$)</label>
-          <input type="number" id="mTratDep" class="form-control" value="1000">
+          <label for="mTratDep">Depósito para reservar (${escapeHTML(symbol)})</label>
+          <input type="number" id="mTratDep" class="form-control" min="0" value="${escapeHTML(t?.depositRequired ?? 1000)}">
         </div>
+      </div>
+      <p class="admin-gate-hint" style="text-align:left;margin-top:-6px;">${escapeHTML(depositHint)}</p>
+      <div class="form-group">
+        <label for="mTratDesc">Descripción para las clientas</label>
+        <textarea id="mTratDesc" class="form-control" rows="3" maxlength="500" placeholder="Activos, aparatología y beneficios del protocolo…">${escapeHTML(t?.description || '')}</textarea>
       </div>
       <div class="form-group">
-        <label>Descripción Clínica del Protocolo</label>
-        <textarea id="mTratDesc" class="form-control" rows="3" placeholder="Detalles de los activos y aparatología incluidos..."></textarea>
+        <label>Insumos que se descuentan por sesión</label>
+        <div class="supply-list">
+          ${state.inventory.length ? state.inventory.map(item => `
+            <label class="supply-row">
+              <input type="checkbox" class="mSupplyCheck" value="${escapeHTML(item.id)}" ${supplies.has(item.id) ? 'checked' : ''}
+                     onchange="this.closest('.supply-row').querySelector('.mSupplyQty').disabled = !this.checked">
+              <span class="supply-name">${escapeHTML(item.name)}</span>
+              <input type="number" class="form-control mSupplyQty" min="0.1" step="0.1" value="${escapeHTML(supplies.get(item.id) || 1)}"
+                     ${supplies.has(item.id) ? '' : 'disabled'} aria-label="Cantidad de ${escapeHTML(item.name)}">
+              <span class="supply-unit">${escapeHTML(item.unit || '')}</span>
+            </label>
+          `).join('') : '<p class="admin-gate-hint" style="text-align:left;">No hay insumos en el inventario.</p>'}
+        </div>
       </div>
+      <p id="mTratMsg" class="form-message" hidden></p>
     `,
     `
+      ${t ? `<button class="btn-soft danger-soft" onclick="askDelete('treatment', '${escapeHTML(t.id)}')">Eliminar</button>` : ''}
       <button class="btn-soft" onclick="closeModal()">Cancelar</button>
-      <button class="btn-gold" onclick="saveNewTreatment()">Guardar Protocolo</button>
+      <button class="btn-gold" onclick="saveTreatment(${t ? `'${escapeHTML(t.id)}'` : 'null'})">${t ? 'Guardar cambios' : 'Guardar protocolo'}</button>
     `
   );
 }
 
-function saveNewTreatment() {
+function saveTreatment(treatmentId) {
+  const msg = document.getElementById('mTratMsg');
+  const fail = text => {
+    msg.textContent = text;
+    msg.hidden = false;
+  };
   const name = document.getElementById('mTratName').value.trim();
-  if (!name) return;
-  state.treatments.push({
-    id: 'trat-' + Date.now(),
+  const durationMin = Number(document.getElementById('mTratDur').value);
+  const price = Number(document.getElementById('mTratPrice').value);
+  const depositRequired = Number(document.getElementById('mTratDep').value);
+  if (name.length < 3) return fail('Escribe el nombre del tratamiento.');
+  if (!(durationMin >= 10 && durationMin <= 480)) return fail('La duración debe estar entre 10 y 480 minutos.');
+  if (!(price >= 0)) return fail('Escribe un precio válido.');
+  if (!(depositRequired >= 0) || depositRequired > price) return fail('El depósito no puede ser mayor que el precio.');
+
+  const suppliesUsed = [...document.querySelectorAll('.supply-row')]
+    .filter(row => row.querySelector('.mSupplyCheck').checked)
+    .map(row => ({
+      inventoryId: row.querySelector('.mSupplyCheck').value,
+      qty: Math.max(0.1, Number(row.querySelector('.mSupplyQty').value) || 1)
+    }));
+
+  const data = {
     name,
     category: document.getElementById('mTratCat').value.trim() || 'Protocolo Facial',
-    durationMin: Number(document.getElementById('mTratDur').value || 60),
-    price: Number(document.getElementById('mTratPrice').value || 3000),
-    depositRequired: Number(document.getElementById('mTratDep').value || 1000),
-    description: document.getElementById('mTratDesc').value.trim() || 'Protocolo especializado Niskin Beauty Studio.',
-    suppliesUsed: [{ inventoryId: 'inv-1', qty: 1 }]
-  });
+    durationMin: Math.round(durationMin),
+    price,
+    depositRequired,
+    description: document.getElementById('mTratDesc').value.trim(),
+    suppliesUsed
+  };
+
+  if (treatmentId) {
+    const t = state.treatments.find(x => x.id === treatmentId);
+    if (!t) return;
+    Object.assign(t, data);
+    showToast(`"${name}" actualizado.`);
+  } else {
+    state.treatments.push({ id: 'trat-' + Date.now(), ...data });
+    showToast(`Tratamiento "${name}" agregado al catálogo.`);
+  }
   saveState();
   closeModal();
-  showToast(`Tratamiento "${name}" agregado al catálogo.`);
   renderWorkspace();
 }
 

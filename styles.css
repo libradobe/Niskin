@@ -1669,6 +1669,127 @@ select.form-control,
   max-width: 170px;
 }
 
+/* Catálogo de tratamientos */
+.treatment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 20px;
+}
+
+.treatment-card {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.treatment-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.treatment-duration {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.treatment-card h3 {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  line-height: 1.2;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.treatment-desc {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.treatment-supplies {
+  margin-top: 8px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.treatment-card-foot {
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.treatment-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.treatment-deposit {
+  font-size: 0.76rem;
+  color: var(--gold-hover);
+}
+
+.treatment-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Insumos por sesión (formulario de tratamiento) */
+.supply-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.supply-row {
+  display: grid;
+  grid-template-columns: 20px 1fr 76px auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.supply-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold-primary);
+}
+
+.supply-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.supply-row .form-control {
+  padding: 6px 8px;
+}
+
+.supply-row .form-control:disabled {
+  opacity: 0.45;
+}
+
+.supply-unit {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* Hoja de citas del día (calendario) */
 .day-sheet-meta {
   font-size: 0.82rem;

@@ -60,7 +60,8 @@ El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estát
 | --- | --- | --- |
 | Usar agenda, expedientes, inventario, finanzas | ✅ | ✅ |
 | Eliminar citas | ✅ | ✅ |
-| Eliminar clientas y tratamientos | ✅ | — |
+| Crear, editar y eliminar tratamientos | ✅ | ✅ |
+| Eliminar clientas | ✅ | — |
 | Configuración del negocio | ✅ | ✅ |
 | Equipo y Accesos, conexión del servidor | ✅ | — |
 

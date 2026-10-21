@@ -798,7 +798,8 @@ app.delete('/api/admin/patients/:id', requireAdmin, requireStaffManager, require
   }
 });
 
-app.delete('/api/admin/treatments/:id', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+// Administradoras y cosmetólogas pueden eliminar tratamientos del catálogo
+app.delete('/api/admin/treatments/:id', requireAdmin, requireMongo, async (req, res) => {
   try {
     const treatment = await Treatment.findOne({ id: req.params.id }).lean();
     if (!treatment) return res.status(404).json({ status: 'error', message: 'No se encontró ese tratamiento.' });
