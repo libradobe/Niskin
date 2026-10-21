@@ -158,6 +158,17 @@ const StudioSettingsSchema = new mongoose.Schema({
   depositInstructions: { type: String, default: '' },
   cancellationPolicy: { type: String, default: '' },
   requireDeposit: { type: Boolean, default: true },
+  // Monto del depósito: 'treatment' (el de cada tratamiento), 'fixed' (monto fijo) o 'percent' (% del precio)
+  depositType: { type: String, default: 'treatment' },
+  depositValue: { type: Number, default: 0 },
+  currency: { type: String, default: 'DOP' },
+  language: { type: String, default: 'es' },
+  // Horario laboral por día de la semana (0 = domingo) y cada cuántos minutos se ofrece una hora
+  weeklySchedule: {
+    type: [{ _id: false, day: Number, open: Boolean, start: String, end: String }],
+    default: undefined
+  },
+  slotInterval: { type: Number, default: 30 },
   bookingEnabled: { type: Boolean, default: true },
   slots: { type: [String], default: ['09:00 AM', '10:00 AM', '11:30 AM', '02:30 PM', '04:00 PM', '05:30 PM'] },
   closedWeekdays: { type: [Number], default: [0] },

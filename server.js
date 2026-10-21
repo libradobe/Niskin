@@ -19,6 +19,8 @@ const {
 } = require('./models/StudioData');
 
 const notify = require('./notify');
+const sched = require('./schedule');
+const { clientMessage } = require('./client-messages');
 
 const {
   createToken,
@@ -175,6 +177,25 @@ function appointmentTimestamp(dateStr, slot) {
   return Date.UTC(y, m - 1, d, Math.floor(minutes / 60) - STUDIO_UTC_OFFSET_HOURS, minutes % 60);
 }
 
+function formatDateFor(lang, dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-DO', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+  });
+}
+
+function whenText(lang, a) {
+  return `${formatDateFor(lang, a.date)} ${clientMessage(lang, 'at')} ${a.time}`;
+}
+
+async function clientLang() {
+  try {
+    return (await getSettings()).language || 'es';
+  } catch (e) {
+    return 'es';
+  }
+}
+
 function formatDateEs(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('es-DO', {
@@ -201,9 +222,23 @@ let settingsCache = null;
 async function getSettings() {
   if (settingsCache) return settingsCache;
   let doc = await StudioSettings.findOne({ id: 'studio' }).lean();
-  if (!doc) doc = (await StudioSettings.create({ id: 'studio' })).toObject();
+  if (!doc) {
+    doc = (await StudioSettings.create({ id: 'studio', weeklySchedule: sched.DEFAULT_WEEKLY_SCHEDULE })).toObject();
+  } else if (!Array.isArray(doc.weeklySchedule) || doc.weeklySchedule.length !== 7) {
+    // Migración: la configuración anterior usaba una lista de horas fijas y días cerrados
+    const weeklySchedule = sched.legacyToWeekly(doc);
+    doc = await StudioSettings.findOneAndUpdate(
+      { id: 'studio' },
+      { $set: { weeklySchedule, slotInterval: doc.slotInterval || 30 } },
+      { new: true }
+    ).lean();
+  }
   settingsCache = doc;
   return doc;
+}
+
+function closedWeekdaysOf(st) {
+  return (st.weeklySchedule || []).filter(d => !d.open).map(d => d.day);
 }
 
 function toPublicSettings(st) {
@@ -218,6 +253,10 @@ function toPublicSettings(st) {
     depositInstructions: st.depositInstructions,
     cancellationPolicy: st.cancellationPolicy,
     requireDeposit: st.requireDeposit !== false,
+    depositType: st.depositType || 'treatment',
+    depositValue: st.depositValue || 0,
+    currency: sched.CURRENCIES[st.currency] ? st.currency : 'DOP',
+    language: sched.LANGUAGES.includes(st.language) ? st.language : 'es',
     bookingEnabled: st.bookingEnabled !== false
   };
 }
@@ -225,8 +264,9 @@ function toPublicSettings(st) {
 function toAdminSettings(st) {
   return {
     ...toPublicSettings(st),
-    slots: st.slots,
-    closedWeekdays: st.closedWeekdays,
+    weeklySchedule: st.weeklySchedule,
+    slotInterval: st.slotInterval || 30,
+    closedWeekdays: closedWeekdaysOf(st),
     minHoursNotice: st.minHoursNotice,
     maxDaysAhead: st.maxDaysAhead,
     maxActiveBookings: st.maxActiveBookings,
@@ -646,33 +686,40 @@ app.post('/api/state', requireAdmin, requireMongo, async (req, res) => {
 
 async function notifyStateChanges(prevAppointments, appointments, prevInventory, inventory, staff) {
   const st = await getSettings();
+  const L = st.language || 'es';
   const prevById = new Map(prevAppointments.map(a => [a.id, a]));
 
   for (const a of appointments) {
     const prev = prevById.get(a.id);
-    const when = `${formatDateEs(a.date)} a las ${a.time}`;
+    const vars = { treatment: a.treatmentName, when: whenText(L, a), specialist: a.specialistName, business: st.businessName };
     if (!prev) {
       if (a.date >= todayInStudio() && ACTIVE_STATUSES.includes(a.status)) {
         notify.notifyClient(a.patientId, {
-          title: `Tienes una cita en ${st.businessName}`,
-          body: `${a.treatmentName} • ${when} con ${a.specialistName}.`,
+          title: clientMessage(L, 'pushNewTitle', vars),
+          body: clientMessage(L, 'pushNewBody', vars),
           tag: `cita-${a.id}`
         });
       }
       continue;
     }
     if (prev.status !== a.status) {
-      const messages = {
-        'Confirmada': ['¡Tu cita está confirmada! ✨', `${a.treatmentName} • ${when}.${a.paymentMode === 'al-finalizar' ? ' Pagas el total al finalizar tu sesión.' : ''} Te esperamos.`],
-        'Cancelada': ['Tu cita fue cancelada', `${a.treatmentName} del ${when}. Escríbenos para reprogramar.`],
-        'Completada': [`Gracias por visitarnos 💛`, `Ya puedes ver tu sesión de ${a.treatmentName} en "Mi piel".`]
-      };
-      const msg = messages[a.status];
-      if (msg) notify.notifyClient(a.patientId, { title: msg[0], body: msg[1], tag: `cita-${a.id}` });
+      const keys = {
+        'Confirmada': ['pushConfirmedTitle', 'pushConfirmedBody'],
+        'Cancelada': ['pushCancelledTitle', 'pushCancelledBody'],
+        'Completada': ['pushCompletedTitle', 'pushCompletedBody']
+      }[a.status];
+      if (keys) {
+        const payAtEnd = a.status === 'Confirmada' && a.paymentMode === 'al-finalizar' ? clientMessage(L, 'pushPayAtEnd') : '';
+        notify.notifyClient(a.patientId, {
+          title: clientMessage(L, keys[0], vars),
+          body: clientMessage(L, keys[1], { ...vars, payAtEnd }),
+          tag: `cita-${a.id}`
+        });
+      }
     } else if (prev.date !== a.date || prev.time !== a.time) {
       notify.notifyClient(a.patientId, {
-        title: 'Tu cita cambió de horario',
-        body: `${a.treatmentName} • ahora el ${when}.`,
+        title: clientMessage(L, 'pushChangedTitle', vars),
+        body: clientMessage(L, 'pushChangedBody', vars),
         tag: `cita-${a.id}`
       });
     }
@@ -716,10 +763,11 @@ app.delete('/api/admin/appointments/:id', requireAdmin, requireMongo, async (req
     res.json({ status: 'ok' });
 
     if (ACTIVE_STATUSES.includes(appt.status) && appt.date >= todayInStudio()) {
-      const st = await getSettings();
+      const L = await clientLang();
+      const vars = { treatment: appt.treatmentName, when: whenText(L, appt) };
       notify.notifyClient(appt.patientId, {
-        title: 'Tu cita fue cancelada',
-        body: `${appt.treatmentName} del ${formatDateEs(appt.date)} a las ${appt.time}. Escríbenos a ${st.businessName} para reprogramar.`,
+        title: clientMessage(L, 'pushCancelledTitle', vars),
+        body: clientMessage(L, 'pushCancelledBody', vars),
         tag: `cita-${appt.id}`
       });
     }
@@ -791,6 +839,36 @@ app.put('/api/admin/settings', requireAdmin, requireStaffManager, requireMongo, 
   if (body.whatsapp !== undefined) update.whatsapp = String(body.whatsapp || '').replace(/[^\d+]/g, '').slice(0, 16);
   if (body.bookingEnabled !== undefined) update.bookingEnabled = Boolean(body.bookingEnabled);
   if (body.requireDeposit !== undefined) update.requireDeposit = Boolean(body.requireDeposit);
+  if (body.depositType !== undefined) {
+    if (!['treatment', 'fixed', 'percent'].includes(body.depositType)) {
+      return res.status(400).json({ status: 'error', message: 'Tipo de depósito no válido.' });
+    }
+    update.depositType = body.depositType;
+  }
+  if (body.depositValue !== undefined) {
+    const type = update.depositType || current.depositType || 'treatment';
+    update.depositValue = type === 'percent'
+      ? clampInt(body.depositValue, 0, 100, 0)
+      : clampInt(body.depositValue, 0, 10000000, 0);
+  }
+  if (body.currency !== undefined) {
+    if (!sched.CURRENCIES[body.currency]) return res.status(400).json({ status: 'error', message: 'Moneda no válida.' });
+    update.currency = body.currency;
+  }
+  if (body.language !== undefined) {
+    if (!sched.LANGUAGES.includes(body.language)) return res.status(400).json({ status: 'error', message: 'Idioma no válido.' });
+    update.language = body.language;
+  }
+  if (body.slotInterval !== undefined) update.slotInterval = clampInt(body.slotInterval, 10, 240, current.slotInterval || 30);
+  if (body.weeklySchedule !== undefined) {
+    const weekly = sched.normalizeWeekly(body.weeklySchedule);
+    if (!weekly) return res.status(400).json({ status: 'error', message: 'Horario no válido.' });
+    if (!weekly.some(d => d.open)) {
+      return res.status(400).json({ status: 'error', message: 'El estudio debe abrir al menos un día (revisa que la hora de cierre sea mayor que la de apertura).' });
+    }
+    update.weeklySchedule = weekly;
+    update.closedWeekdays = weekly.filter(d => !d.open).map(d => d.day);
+  }
   if (body.remindersEnabled !== undefined) update.remindersEnabled = Boolean(body.remindersEnabled);
   if (body.minHoursNotice !== undefined) update.minHoursNotice = clampInt(body.minHoursNotice, 0, 72, current.minHoursNotice);
   if (body.maxDaysAhead !== undefined) update.maxDaysAhead = clampInt(body.maxDaysAhead, 1, 365, current.maxDaysAhead);
@@ -864,27 +942,28 @@ app.post('/api/client/register', authLimiter, requireMongo, async (req, res) => 
   const mainConcern = cleanText(body.mainConcern, 160);
   const allergies = cleanText(body.allergies, 160);
   const age = Number(body.age);
+  const L = await clientLang();
 
   if (name.length < 3) {
-    return res.status(400).json({ status: 'error', message: 'Escribe tu nombre completo.' });
+    return res.status(400).json({ status: 'error', message: clientMessage(L, 'nameRequired') });
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-    return res.status(400).json({ status: 'error', message: 'Escribe un correo electrónico válido.' });
+    return res.status(400).json({ status: 'error', message: clientMessage(L, 'emailInvalid') });
   }
   if (phone.replace(/\D/g, '').length < 10) {
-    return res.status(400).json({ status: 'error', message: 'Escribe un teléfono válido de al menos 10 dígitos.' });
+    return res.status(400).json({ status: 'error', message: clientMessage(L, 'phoneInvalid') });
   }
   if (password.length < 8 || password.length > 128) {
-    return res.status(400).json({ status: 'error', message: 'La contraseña debe tener al menos 8 caracteres.' });
+    return res.status(400).json({ status: 'error', message: clientMessage(L, 'passwordShort') });
   }
   if (!body.acceptPrivacy) {
-    return res.status(400).json({ status: 'error', message: 'Debes aceptar el aviso de privacidad para continuar.' });
+    return res.status(400).json({ status: 'error', message: clientMessage(L, 'privacyRequired') });
   }
 
   try {
     const existing = await ClientAccount.findOne({ email }).lean();
     if (existing) {
-      return res.status(409).json({ status: 'error', message: 'Ya existe una cuenta con este correo. Inicia sesión.' });
+      return res.status(409).json({ status: 'error', message: clientMessage(L, 'emailExists') });
     }
 
     const patientCount = await Patient.countDocuments();
@@ -929,7 +1008,7 @@ app.post('/api/client/register', authLimiter, requireMongo, async (req, res) => 
     } catch (err) {
       await Patient.deleteOne({ id: patient.id });
       if (err.code === 11000) {
-        return res.status(409).json({ status: 'error', message: 'Ya existe una cuenta con este correo. Inicia sesión.' });
+        return res.status(409).json({ status: 'error', message: clientMessage(L, 'emailExists') });
       }
       throw err;
     }
@@ -947,34 +1026,36 @@ app.post('/api/client/register', authLimiter, requireMongo, async (req, res) => 
     });
   } catch (error) {
     console.error('Error registrando clienta:', error);
-    return res.status(500).json({ status: 'error', message: 'No pudimos crear tu cuenta. Inténtalo de nuevo.' });
+    return res.status(500).json({ status: 'error', message: clientMessage(L, 'registerFailed') });
   }
 });
 
 app.post('/api/client/login', authLimiter, requireMongo, async (req, res) => {
   const email = cleanText((req.body || {}).email, 120).toLowerCase();
   const password = String((req.body || {}).password || '');
+  const L = await clientLang();
 
   try {
     const account = await ClientAccount.findOne({ email });
     if (!account || !verifyPassword(password, account.passwordHash, account.passwordSalt)) {
-      return res.status(401).json({ status: 'error', message: 'Correo o contraseña incorrectos.' });
+      return res.status(401).json({ status: 'error', message: clientMessage(L, 'loginInvalid') });
     }
     account.lastLoginAt = new Date();
     await account.save();
     return res.json({ status: 'ok', token: createToken('client', account.patientId) });
   } catch (error) {
     console.error('Error en login de clienta:', error);
-    return res.status(500).json({ status: 'error', message: 'No pudimos iniciar sesión. Inténtalo de nuevo.' });
+    return res.status(500).json({ status: 'error', message: clientMessage(L, 'loginFailed') });
   }
 });
 
 // Perfil, citas propias y catálogo público
 app.get('/api/client/me', requireRole('client'), requireMongo, async (req, res) => {
+  const L = await clientLang();
   try {
     const patient = await Patient.findOne({ id: req.auth.sub }).lean();
     if (!patient) {
-      return res.status(401).json({ status: 'unauthorized', message: 'Tu cuenta ya no está disponible.' });
+      return res.status(401).json({ status: 'unauthorized', message: clientMessage(L, 'accountGone') });
     }
     const [appointments, treatments, specialists, st] = await Promise.all([
       Appointment.find({ patientId: patient.id }).sort({ date: -1, time: -1 }).lean(),
@@ -987,68 +1068,88 @@ app.get('/api/client/me', requireRole('client'), requireMongo, async (req, res) 
       status: 'ok',
       profile: toClientProfile(patient),
       appointments: appointments.map(toClientAppointment),
-      treatments,
+      // `deposit`: lo que se cobra al reservar según Configuración (0 = paga todo al finalizar)
+      treatments: treatments.map(t => ({ ...t, deposit: sched.depositFor(t, st) })),
       specialists,
       studio: toPublicSettings(st),
       booking: {
         enabled: st.bookingEnabled !== false,
-        slots: st.slots,
-        closedWeekdays: st.closedWeekdays,
+        closedWeekdays: closedWeekdaysOf(st),
         minDate: todayInStudio(),
         maxDate: addDays(todayInStudio(), st.maxDaysAhead)
       }
     });
   } catch (error) {
     console.error('Error cargando perfil de clienta:', error);
-    return res.status(500).json({ status: 'error', message: 'No pudimos cargar tu información.' });
+    return res.status(500).json({ status: 'error', message: clientMessage(L, 'loadFailed') });
   }
 });
 
-// Horarios disponibles (solo devuelve horas, nunca datos de otras clientas)
+// Citas activas de una especialista en una fecha, con su duración (para detectar cruces)
+async function busyAppointments(date, specialistId) {
+  const appts = await Appointment.find({
+    date,
+    specialistId,
+    status: { $in: ACTIVE_STATUSES }
+  }).select('time treatmentId -_id').lean();
+  const durations = new Map(
+    (await Treatment.find({ id: { $in: appts.map(a => a.treatmentId) } }).select('id durationMin -_id').lean())
+      .map(t => [t.id, t.durationMin])
+  );
+  return appts.map(a => ({ time: a.time, durationMin: durations.get(a.treatmentId) || 60 }));
+}
+
+// Horarios del día: los ocupados se devuelven marcados (sin datos de otras clientas)
 app.get('/api/client/availability', requireRole('client'), requireMongo, async (req, res) => {
-  const { date, specialistId } = req.query;
+  const L = await clientLang();
+  const { date, specialistId, treatmentId } = req.query;
   if (!isValidDateString(date) || !specialistId) {
-    return res.status(400).json({ status: 'error', message: 'Fecha o especialista no válidos.' });
+    return res.status(400).json({ status: 'error', message: clientMessage(L, 'badDateOrSpecialist') });
   }
   try {
     const st = await getSettings();
-    if (st.closedWeekdays.includes(weekdayOf(date))) {
-      return res.json({ status: 'ok', closed: true, available: [] });
+    const day = sched.dayScheduleFor(st, date);
+    if (!day || !day.open) {
+      return res.json({ status: 'ok', closed: true, slots: [], available: [] });
     }
-    const taken = await Appointment.find({
-      date,
-      specialistId: String(specialistId),
-      status: { $in: ACTIVE_STATUSES }
-    }).select('time -_id').lean();
-    const takenTimes = new Set(taken.map(a => a.time));
-    const available = st.slots.filter(slot => !takenTimes.has(slot) && isSlotInFuture(date, slot, st.minHoursNotice));
-    return res.json({ status: 'ok', closed: false, available });
+    const treatment = treatmentId ? await Treatment.findOne({ id: String(treatmentId) }).select('durationMin -_id').lean() : null;
+    const durationMin = treatment?.durationMin || 60;
+    const busy = await busyAppointments(date, String(specialistId));
+    const slots = sched.slotStatuses({ settings: st, dateStr: date, durationMin, existing: busy })
+      .map(s => (s.status === 'available' && !isSlotInFuture(date, s.time, st.minHoursNotice) ? { ...s, status: 'past' } : s))
+      .filter(s => s.status !== 'past');
+    return res.json({
+      status: 'ok',
+      closed: false,
+      slots,
+      available: slots.filter(s => s.status === 'available').map(s => s.time)
+    });
   } catch (error) {
-    return res.status(500).json({ status: 'error', message: 'No pudimos consultar la disponibilidad.' });
+    console.error('Error consultando disponibilidad:', error);
+    return res.status(500).json({ status: 'error', message: clientMessage(L, 'availabilityFailed') });
   }
 });
 
 app.post('/api/client/appointments', requireRole('client'), requireMongo, async (req, res) => {
   const { treatmentId, specialistId, date, time } = req.body || {};
+  const L = await clientLang();
 
   if (!isValidDateString(date)) {
-    return res.status(400).json({ status: 'error', message: 'Selecciona una fecha válida.' });
+    return res.status(400).json({ status: 'error', message: clientMessage(L, 'invalidDate') });
   }
 
   try {
     const st = await getSettings();
     const today = todayInStudio();
     if (st.bookingEnabled === false) {
-      return res.status(400).json({ status: 'error', message: 'Las reservas en línea están pausadas. Escríbenos por WhatsApp.' });
+      return res.status(400).json({ status: 'error', message: clientMessage(L, 'bookingPaused') });
     }
     if (date < today || date > addDays(today, st.maxDaysAhead)) {
-      return res.status(400).json({ status: 'error', message: `Puedes reservar desde hoy y hasta ${st.maxDaysAhead} días después.` });
+      return res.status(400).json({ status: 'error', message: clientMessage(L, 'bookingRange', { days: st.maxDaysAhead }) });
     }
-    if (st.closedWeekdays.includes(weekdayOf(date))) {
-      return res.status(400).json({ status: 'error', message: 'El estudio no abre ese día. Elige otra fecha.' });
-    }
-    if (!st.slots.includes(time) || !isSlotInFuture(date, time, st.minHoursNotice)) {
-      return res.status(400).json({ status: 'error', message: 'Ese horario ya no está disponible.' });
+    const day = sched.dayScheduleFor(st, date);
+    if (!day || !day.open) {
+      return res.status(400).json({ status: 'error', message: clientMessage(L, 'closedDay') });
     }
 
     const [patient, treatment, specialist] = await Promise.all([
@@ -1057,10 +1158,16 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       Specialist.findOne({ id: String(specialistId) }).lean()
     ]);
     if (!patient) {
-      return res.status(401).json({ status: 'unauthorized', message: 'Tu cuenta ya no está disponible.' });
+      return res.status(401).json({ status: 'unauthorized', message: clientMessage(L, 'accountGone') });
     }
     if (!treatment || !specialist) {
-      return res.status(400).json({ status: 'error', message: 'Selecciona un tratamiento y una especialista válidos.' });
+      return res.status(400).json({ status: 'error', message: clientMessage(L, 'invalidTreatment') });
+    }
+
+    const durationMin = treatment.durationMin || 60;
+    const validTimes = sched.slotsForDate(st, date, durationMin);
+    if (!validTimes.includes(time) || !isSlotInFuture(date, time, st.minHoursNotice)) {
+      return res.status(400).json({ status: 'error', message: clientMessage(L, 'slotUnavailable') });
     }
 
     const activeCount = await Appointment.countDocuments({
@@ -1069,25 +1176,19 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       date: { $gte: today }
     });
     if (activeCount >= st.maxActiveBookings) {
-      return res.status(400).json({
-        status: 'error',
-        message: `Ya tienes ${activeCount} citas activas. Escríbenos si necesitas agendar más.`
-      });
+      return res.status(400).json({ status: 'error', message: clientMessage(L, 'tooManyActive', { count: activeCount }) });
     }
 
-    const clash = await Appointment.exists({
-      date,
-      time,
-      specialistId: specialist.id,
-      status: { $in: ACTIVE_STATUSES }
-    });
-    if (clash) {
-      return res.status(409).json({ status: 'error', message: 'Alguien acaba de reservar ese horario. Elige otro.' });
+    const busy = await busyAppointments(date, specialist.id);
+    const status = sched.slotStatuses({ settings: st, dateStr: date, durationMin, existing: busy }).find(s => s.time === time);
+    if (!status || status.status !== 'available') {
+      return res.status(409).json({ status: 'error', message: clientMessage(L, 'slotJustTaken') });
     }
 
-    // Sin depósito (desactivado en Configuración o tratamiento sin depósito): la cita queda
-    // confirmada y la clienta paga el total al finalizar la sesión
-    const needsDeposit = st.requireDeposit !== false && Number(treatment.depositRequired) > 0;
+    // Depósito según Configuración (por tratamiento, monto fijo o porcentaje).
+    // Sin depósito, la cita queda confirmada y la clienta paga el total al finalizar.
+    const depositAmount = sched.depositFor(treatment, st);
+    const needsDeposit = depositAmount > 0;
 
     const appointment = await Appointment.create({
       id: `cita-web-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
@@ -1110,7 +1211,7 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
     res.status(201).json({
       status: 'ok',
       appointment: toClientAppointment(appointment.toObject()),
-      depositRequired: needsDeposit ? treatment.depositRequired : 0
+      depositRequired: depositAmount
     });
 
     notify.notifyStaff({
@@ -1121,18 +1222,19 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
     }, { specialistId: specialist.id });
   } catch (error) {
     console.error('Error creando cita de clienta:', error);
-    return res.status(500).json({ status: 'error', message: 'No pudimos agendar tu cita. Inténtalo de nuevo.' });
+    return res.status(500).json({ status: 'error', message: clientMessage(L, 'bookingFailed') });
   }
 });
 
 app.post('/api/client/appointments/:id/cancel', requireRole('client'), requireMongo, async (req, res) => {
+  const L = await clientLang();
   try {
     const appointment = await Appointment.findOne({ id: req.params.id, patientId: req.auth.sub });
     if (!appointment) {
-      return res.status(404).json({ status: 'error', message: 'No encontramos esa cita.' });
+      return res.status(404).json({ status: 'error', message: clientMessage(L, 'apptNotFound') });
     }
     if (!ACTIVE_STATUSES.includes(appointment.status) || appointment.date < todayInStudio()) {
-      return res.status(400).json({ status: 'error', message: 'Esta cita ya no se puede cancelar en línea.' });
+      return res.status(400).json({ status: 'error', message: clientMessage(L, 'cannotCancel') });
     }
     appointment.status = 'Cancelada';
     await appointment.save();
@@ -1145,7 +1247,7 @@ app.post('/api/client/appointments/:id/cancel', requireRole('client'), requireMo
       url: './?vista=agenda'
     }, { specialistId: appointment.specialistId });
   } catch (error) {
-    return res.status(500).json({ status: 'error', message: 'No pudimos cancelar la cita.' });
+    return res.status(500).json({ status: 'error', message: clientMessage(L, 'cancelFailed') });
   }
 });
 
@@ -1184,9 +1286,11 @@ async function sendDueReminders() {
       const diff = appointmentTimestamp(a.date, a.time) - now;
       if (diff <= 0 || diff > windowMs) continue;
       await Appointment.updateOne({ id: a.id }, { $set: { reminderSentAt: new Date() } });
+      const L = st.language || 'es';
+      const vars = { treatment: a.treatmentName, when: whenText(L, a), specialist: a.specialistName, business: st.businessName };
       notify.notifyClient(a.patientId, {
-        title: `Recordatorio: tu cita en ${st.businessName}`,
-        body: `${a.treatmentName} • ${formatDateEs(a.date)} a las ${a.time} con ${a.specialistName}.`,
+        title: clientMessage(L, 'pushReminderTitle', vars),
+        body: clientMessage(L, 'pushReminderBody', vars),
         tag: `recordatorio-${a.id}`
       });
     }

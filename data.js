@@ -89,9 +89,9 @@ function createSkinVisualSVG({ mode, clientName, sessionLabel, dateLabel, condit
     <path d="M 282 232 Q 310 245 338 232 Q 310 237 282 232 Z" fill="${isBefore ? '#C48A7E' : '#D4887A'}" opacity="0.85"/>
     ${skinMarks}
     <!-- Etiqueta clínica inferior -->
-    <rect x="24" y="322" width="572" height="42" rx="12" fill="#3C3226" opacity="0.82"/>
-    <text x="42" y="348" font-family="Plus Jakarta Sans, sans-serif" font-size="13" font-weight="600" fill="#FAF8F4">${clientName} • ${sessionLabel}</text>
-    <text x="576" y="348" text-anchor="end" font-family="Plus Jakarta Sans, sans-serif" font-size="12" fill="#DFC9A3">${dateLabel}</text>
+    <rect x="24" y="322" width="572" height="42" rx="12" fill="#37332F" opacity="0.82"/>
+    <text x="42" y="348" font-family="Plus Jakarta Sans, sans-serif" font-size="13" font-weight="600" fill="#FBFAF7">${clientName} • ${sessionLabel}</text>
+    <text x="576" y="348" text-anchor="end" font-family="Plus Jakarta Sans, sans-serif" font-size="12" fill="#DFCDA8">${dateLabel}</text>
   </svg>`;
 
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
@@ -112,7 +112,7 @@ const INITIAL_NISKIN_DATA = {
       name: 'Lic. Valeria Niskin',
       role: 'Cosmetóloga Clínica Principal',
       specialty: 'Dermapen, Melasma y Rejuvenecimiento',
-      avatarBg: '#DECBB1',
+      avatarBg: '#EEE5D8',
       initials: 'VN'
     },
     {

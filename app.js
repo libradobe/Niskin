@@ -148,7 +148,7 @@ function openRenderConfigModal() {
   openModalWithHTML(
     'Conexión Hostinger (Frontend) ↔ Render + MongoDB (Backend)',
     `
-      <div style="font-size:0.84rem;color:var(--text-secondary);background:#FAF6EE;padding:12px 14px;border-radius:10px;border:1px solid var(--border-card);">
+      <div style="font-size:0.84rem;color:var(--text-secondary);background:#FAF8F3;padding:12px 14px;border-radius:10px;border:1px solid var(--border-card);">
         <strong>Arquitectura Opción B activa:</strong> Tu interfaz web vive en <strong>Hostinger</strong> y se conecta mediante API a tu servidor Node.js en <strong>Render</strong> + <strong>MongoDB Atlas</strong>.
       </div>
       <div class="form-group">
@@ -727,43 +727,83 @@ function formatDateLong(iso) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function clientDateLong(iso) {
+  if (uiState.settings?.language !== 'en') return formatDateLong(iso);
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+// Mensajes de WhatsApp para la clienta, en el idioma elegido en Configuración (sin emojis:
+// algunos teléfonos Android los muestran como �)
+const WA_TEXT = {
+  es: {
+    date: 'Fecha', specialist: 'Especialista', address: 'Dirección', at: 'a las',
+    pending: (n, b, details, dep, instr) => [
+      `Hola ${n}, te escribimos de ${b}.`,
+      `Recibimos tu reserva:\n${details}`,
+      `Para confirmarla, realiza el depósito de *${dep}*${instr ? `:\n${instr}` : '.'}`,
+      'Cuando lo hagas, envíanos el comprobante por aquí. ¡Gracias!'
+    ],
+    confirmed: (n, b, details, payText) => [
+      `Hola ${n}, tu cita en ${b} está confirmada:`, details, payText,
+      '¡Te esperamos! Si necesitas reprogramar, responde a este mensaje.'
+    ],
+    payAtEnd: total => `El pago de *${total}* se realiza al finalizar tu sesión.`,
+    payRest: (dep, rest) => `Ya recibimos tu depósito de ${dep}. El resto (*${rest}*) se paga al finalizar tu sesión.`,
+    cancelled: (n, t, when) => `Hola ${n}, tu cita de *${t}* del ${when} quedó cancelada. Si quieres reprogramarla, respóndenos por aquí y buscamos otro horario.`,
+    followUp: (n, b, t) => `Hola ${n}, gracias por visitarnos en ${b}. ¿Cómo sentiste tu piel después de tu sesión de *${t}*? Cualquier duda, escríbenos.`,
+    hello: (n, b) => `Hola ${n}, te escribimos de ${b}.`
+  },
+  en: {
+    date: 'Date', specialist: 'Specialist', address: 'Address', at: 'at',
+    pending: (n, b, details, dep, instr) => [
+      `Hi ${n}, this is ${b}.`,
+      `We received your booking:\n${details}`,
+      `To confirm it, please send the *${dep}* deposit${instr ? `:\n${instr}` : '.'}`,
+      'Once done, send us the receipt here. Thank you!'
+    ],
+    confirmed: (n, b, details, payText) => [
+      `Hi ${n}, your appointment at ${b} is confirmed:`, details, payText,
+      'See you soon! If you need to reschedule, just reply to this message.'
+    ],
+    payAtEnd: total => `You pay *${total}* after your session.`,
+    payRest: (dep, rest) => `We received your ${dep} deposit. The balance (*${rest}*) is paid after your session.`,
+    cancelled: (n, t, when) => `Hi ${n}, your *${t}* appointment on ${when} was cancelled. Reply here if you would like to reschedule.`,
+    followUp: (n, b, t) => `Hi ${n}, thank you for visiting ${b}. How does your skin feel after your *${t}* session? Message us with any questions.`,
+    hello: (n, b) => `Hi ${n}, this is ${b}.`
+  }
+};
+
+function waText() {
+  return WA_TEXT[uiState.settings?.language] || WA_TEXT.es;
+}
+
 function buildAppointmentWhatsApp(app, patient) {
   const st = studioSettings();
+  const T = waText();
   const business = st.businessName || 'Niskin Beauty Studio';
   const firstName = nameWithoutTitles(patient?.name || app.patientName)[0] || '';
-  const when = `${formatDateLong(app.date)} a las ${app.time}`;
+  const when = `${clientDateLong(app.date)} ${T.at} ${app.time}`;
   const treatment = state.treatments.find(t => t.id === app.treatmentId);
   const details = [
     `*${app.treatmentName}*`,
-    `Fecha: ${when}`,
-    `Especialista: ${app.specialistName}`,
-    st.address ? `Dirección: ${st.address}` : ''
+    `${T.date}: ${when}`,
+    `${T.specialist}: ${app.specialistName}`,
+    st.address ? `${T.address}: ${st.address}` : ''
   ].filter(Boolean).join('\n');
 
   if (app.status === 'Pendiente Depósito') {
-    const deposit = treatment ? formatMoney(treatment.depositRequired) : 'el depósito';
-    return [
-      `Hola ${firstName}, te escribimos de ${business}.`,
-      `Recibimos tu reserva:\n${details}`,
-      `Para confirmarla, realiza el depósito de *${deposit}*${st.depositInstructions ? `:\n${st.depositInstructions}` : '.'}`,
-      'Cuando lo hagas, envíanos el comprobante por aquí. ¡Gracias!'
-    ].join('\n\n');
+    const amount = depositForTreatment(treatment) || treatment?.depositRequired || 0;
+    return T.pending(firstName, business, details, formatMoney(amount), st.depositInstructions).join('\n\n');
   }
   if (app.status === 'Confirmada') {
-    const payAtEnd = isPayAtEnd(app);
-    return [
-      `Hola ${firstName}, tu cita en ${business} está confirmada:`,
-      details,
-      payAtEnd
-        ? `El pago de *${formatMoney(app.price)}* se realiza al finalizar tu sesión.`
-        : `Ya recibimos tu depósito de ${formatMoney(app.depositPaid)}. El resto (*${formatMoney(Math.max(0, app.price - app.depositPaid))}*) se paga al finalizar tu sesión.`,
-      '¡Te esperamos! Si necesitas reprogramar, responde a este mensaje.'
-    ].join('\n\n');
+    const payText = isPayAtEnd(app)
+      ? T.payAtEnd(formatMoney(app.price))
+      : T.payRest(formatMoney(app.depositPaid), formatMoney(Math.max(0, app.price - app.depositPaid)));
+    return T.confirmed(firstName, business, details, payText).join('\n\n');
   }
-  if (app.status === 'Cancelada') {
-    return `Hola ${firstName}, tu cita de *${app.treatmentName}* del ${when} quedó cancelada. Si quieres reprogramarla, respóndenos por aquí y buscamos otro horario.`;
-  }
-  return `Hola ${firstName}, gracias por visitarnos en ${business}. ¿Cómo sentiste tu piel después de tu sesión de *${app.treatmentName}*? Cualquier duda, escríbenos.`;
+  if (app.status === 'Cancelada') return T.cancelled(firstName, app.treatmentName, when);
+  return T.followUp(firstName, business, app.treatmentName);
 }
 
 function sendAppointmentWhatsApp(appointmentId) {
@@ -780,7 +820,7 @@ function sendPatientWhatsApp(patientId) {
   const patient = state.patients.find(p => p.id === patientId);
   if (!patient) return;
   const st = studioSettings();
-  NiskinWhatsApp.open(patient.phone, `Hola ${nameWithoutTitles(patient.name)[0]}, te escribimos de ${st.businessName || 'Niskin Beauty Studio'}.`);
+  NiskinWhatsApp.open(patient.phone, waText().hello(nameWithoutTitles(patient.name)[0], st.businessName || 'Niskin Beauty Studio'));
 }
 
 // ============================================================================
@@ -912,12 +952,13 @@ function renderSettingsView() {
     return `<div class="surface-card" style="padding:28px;color:var(--text-secondary);">Cargando configuración…</div>`;
   }
   const st = uiState.settings;
-  if (!uiState.settingsDraftSlots) uiState.settingsDraftSlots = [...(st.slots || [])];
-  const slots = uiState.settingsDraftSlots;
+  const weekly = weeklySchedule();
+  const depositType = st.depositType || 'treatment';
   const clientUrl = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, '')}clientes.html`;
+  const sampleTreatment = state.treatments[0];
 
   return `
-    <form class="settings-grid" onsubmit="saveSettings(event)">
+    <form class="settings-grid" onsubmit="saveSettings(event)" oninput="updateSettingsPreview()">
       <section class="surface-card settings-card">
         <h2>Tu negocio</h2>
         <p class="settings-help">Así aparece tu estudio en la página de clientas y en los mensajes.</p>
@@ -950,24 +991,98 @@ function renderSettingsView() {
       </section>
 
       <section class="surface-card settings-card">
-        <h2>WhatsApp y pagos</h2>
-        <p class="settings-help">Las clientas usarán este número para enviarte el comprobante del depósito.</p>
+        <h2>Moneda e idioma</h2>
+        <div class="form-group">
+          <label for="sCurrency">Moneda</label>
+          <select id="sCurrency" class="form-control">
+            ${Object.entries(CURRENCIES).map(([code, c]) => `<option value="${code}" ${st.currency === code ? 'selected' : ''}>${escapeHTML(c.label)}</option>`).join('')}
+          </select>
+          <span class="settings-help" style="margin-top:2px;">Cambia el símbolo en precios, cobros y mensajes. No convierte los montos ya guardados.</span>
+        </div>
+        <div class="form-group">
+          <label for="sLanguage">Idioma de la página de clientas</label>
+          <select id="sLanguage" class="form-control">
+            <option value="es" ${st.language !== 'en' ? 'selected' : ''}>Español</option>
+            <option value="en" ${st.language === 'en' ? 'selected' : ''}>English</option>
+          </select>
+          <span class="settings-help" style="margin-top:2px;">Se aplica a la página de reservas, sus notificaciones y los mensajes de WhatsApp a clientas. El panel del equipo sigue en español.</span>
+        </div>
+      </section>
+
+      <section class="surface-card settings-card">
+        <h2>Cobro de la reservación</h2>
+        <label class="settings-switch">
+          <input type="checkbox" id="sRequireDeposit" ${st.requireDeposit !== false ? 'checked' : ''} onchange="updateSettingsPreview()">
+          <span>Cobrar un depósito para reservar en línea</span>
+        </label>
+        <div id="sDepositFields" class="settings-deposit-fields" ${st.requireDeposit === false ? 'hidden' : ''}>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="sDepositType">Monto del depósito</label>
+              <select id="sDepositType" class="form-control" onchange="updateSettingsPreview()">
+                <option value="treatment" ${depositType === 'treatment' ? 'selected' : ''}>El de cada tratamiento</option>
+                <option value="fixed" ${depositType === 'fixed' ? 'selected' : ''}>Monto fijo</option>
+                <option value="percent" ${depositType === 'percent' ? 'selected' : ''}>Porcentaje del precio</option>
+              </select>
+            </div>
+            <div class="form-group" id="sDepositValueGroup" ${depositType === 'treatment' ? 'hidden' : ''}>
+              <label for="sDepositValue" id="sDepositValueLabel">${depositType === 'percent' ? 'Porcentaje (%)' : `Monto (${escapeHTML(currentCurrency().symbol)})`}</label>
+              <input id="sDepositValue" type="number" min="0" ${depositType === 'percent' ? 'max="100"' : ''} class="form-control" value="${escapeHTML(st.depositValue || 0)}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="sDeposit">Datos para el depósito</label>
+            <textarea id="sDeposit" class="form-control" rows="3" maxlength="600" placeholder="Banco Popular — Cuenta de ahorros 000000000 — A nombre de ...">${escapeHTML(st.depositInstructions)}</textarea>
+          </div>
+        </div>
+        <p id="sDepositPreview" class="settings-preview"></p>
         <div class="form-group">
           <label for="sWhatsapp">WhatsApp del estudio</label>
           <input id="sWhatsapp" class="form-control" type="tel" inputmode="tel" maxlength="20" value="${escapeHTML(st.whatsapp)}" placeholder="809-555-0123">
-        </div>
-        <label class="settings-switch">
-          <input type="checkbox" id="sRequireDeposit" ${st.requireDeposit !== false ? 'checked' : ''}>
-          <span>Pedir depósito para reservar en línea. Si lo desactivas, las reservas quedan confirmadas y la clienta paga el total al finalizar.</span>
-        </label>
-        <div class="form-group">
-          <label for="sDeposit">Datos para el depósito</label>
-          <textarea id="sDeposit" class="form-control" rows="4" maxlength="600" placeholder="Banco Popular — Cuenta de ahorros 000000000 — A nombre de ...">${escapeHTML(st.depositInstructions)}</textarea>
+          <span class="settings-help" style="margin-top:2px;">Las clientas lo usan para enviarte el comprobante y escribirte.</span>
         </div>
         <div class="form-group">
           <label for="sPolicy">Política de cancelación</label>
-          <textarea id="sPolicy" class="form-control" rows="3" maxlength="600" placeholder="Ej. Cancela con al menos 24 horas para conservar tu depósito.">${escapeHTML(st.cancellationPolicy)}</textarea>
+          <textarea id="sPolicy" class="form-control" rows="2" maxlength="600" placeholder="Ej. Cancela con al menos 24 horas para conservar tu depósito.">${escapeHTML(st.cancellationPolicy)}</textarea>
         </div>
+        ${sampleTreatment ? '' : ''}
+      </section>
+
+      <section class="surface-card settings-card">
+        <h2>Horario laboral</h2>
+        <p class="settings-help">Marca los días que abres y su horario. Las clientas solo verán horas dentro de este horario.</p>
+        <div class="settings-week">
+          ${[1, 2, 3, 4, 5, 6, 0].map(d => {
+            const day = weekly.find(w => w.day === d) || { open: false, start: '09:00', end: '18:00' };
+            return `
+              <div class="settings-weekday ${day.open ? '' : 'is-closed'}" data-day="${d}">
+                <label class="settings-weekday-name">
+                  <input type="checkbox" class="sDayOpen" ${day.open ? 'checked' : ''} onchange="this.closest('.settings-weekday').classList.toggle('is-closed', !this.checked)">
+                  <span>${WEEKDAY_LABELS[d]}</span>
+                </label>
+                <div class="settings-weekday-hours">
+                  <input type="time" class="form-control sDayStart" value="${escapeHTML(day.start)}" aria-label="Apertura ${WEEKDAY_LABELS[d]}">
+                  <span>a</span>
+                  <input type="time" class="form-control sDayEnd" value="${escapeHTML(day.end)}" aria-label="Cierre ${WEEKDAY_LABELS[d]}">
+                </div>
+                <span class="settings-weekday-closed">Cerrado</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="sSlotInterval">Ofrecer horarios cada</label>
+            <select id="sSlotInterval" class="form-control">
+              ${[15, 20, 30, 45, 60, 90].map(m => `<option value="${m}" ${(Number(st.slotInterval) || 30) === m ? 'selected' : ''}>${m} minutos</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="sMinHours">Anticipación mínima (horas)</label>
+            <input id="sMinHours" type="number" min="0" max="72" class="form-control" value="${escapeHTML(st.minHoursNotice)}">
+          </div>
+        </div>
+        <p class="settings-help">Cada cita bloquea el tiempo que dura su tratamiento, así no se cruzan reservas de la misma especialista.</p>
       </section>
 
       <section class="surface-card settings-card">
@@ -976,44 +1091,15 @@ function renderSettingsView() {
           <input type="checkbox" id="sBookingEnabled" ${st.bookingEnabled ? 'checked' : ''}>
           <span>Permitir que las clientas reserven desde la página</span>
         </label>
-        <div class="form-group">
-          <label>Días de atención</label>
-          <div class="settings-days">
-            ${[1, 2, 3, 4, 5, 6, 0].map(d => `
-              <label class="settings-day">
-                <input type="checkbox" name="sOpenDay" value="${d}" ${(st.closedWeekdays || []).includes(d) ? '' : 'checked'}>
-                <span>${WEEKDAY_LABELS[d].slice(0, 3)}</span>
-              </label>
-            `).join('')}
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Horarios que se ofrecen</label>
-          <div class="settings-slots">
-            ${slots.map((slot, i) => `
-              <span class="settings-slot">${escapeHTML(slot)}
-                <button type="button" onclick="removeSettingsSlot(${i})" aria-label="Quitar ${escapeHTML(slot)}">×</button>
-              </span>
-            `).join('')}
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px;">
-            <input id="sNewSlot" type="time" class="form-control" style="flex:1;min-width:0;" step="900">
-            <button type="button" class="btn-soft btn-sm" onclick="addSettingsSlot()">＋ Agregar</button>
-          </div>
-        </div>
         <div class="form-row">
-          <div class="form-group">
-            <label for="sMinHours">Anticipación mínima (horas)</label>
-            <input id="sMinHours" type="number" min="0" max="72" class="form-control" value="${escapeHTML(st.minHoursNotice)}">
-          </div>
           <div class="form-group">
             <label for="sMaxDays">Reservar hasta (días)</label>
             <input id="sMaxDays" type="number" min="1" max="365" class="form-control" value="${escapeHTML(st.maxDaysAhead)}">
           </div>
-        </div>
-        <div class="form-group">
-          <label for="sMaxActive">Máximo de citas activas por clienta</label>
-          <input id="sMaxActive" type="number" min="1" max="20" class="form-control" value="${escapeHTML(st.maxActiveBookings)}">
+          <div class="form-group">
+            <label for="sMaxActive">Citas activas por clienta</label>
+            <input id="sMaxActive" type="number" min="1" max="20" class="form-control" value="${escapeHTML(st.maxActiveBookings)}">
+          </div>
         </div>
         <p class="settings-help">Enlace para tus clientas: <a href="${escapeHTML(clientUrl)}" target="_blank" rel="noopener">${escapeHTML(clientUrl)}</a></p>
       </section>
@@ -1039,30 +1125,43 @@ function renderSettingsView() {
   `;
 }
 
-function addSettingsSlot() {
-  const slot = timeInputToSlot(document.getElementById('sNewSlot').value);
-  if (!slot) return showToast('Elige una hora.');
-  const slots = uiState.settingsDraftSlots || [];
-  if (!slots.includes(slot)) slots.push(slot);
-  slots.sort((a, b) => slotMinutes(a) - slotMinutes(b));
-  uiState.settingsDraftSlots = slots;
-  rerenderSettingsKeepingValues();
-}
+// Muestra/oculta campos del depósito y un ejemplo con el primer tratamiento
+function updateSettingsPreview() {
+  const requireDeposit = document.getElementById('sRequireDeposit')?.checked;
+  const type = document.getElementById('sDepositType')?.value || 'treatment';
+  const fields = document.getElementById('sDepositFields');
+  const valueGroup = document.getElementById('sDepositValueGroup');
+  const label = document.getElementById('sDepositValueLabel');
+  const valueInput = document.getElementById('sDepositValue');
+  const preview = document.getElementById('sDepositPreview');
+  if (!fields) return;
+  fields.hidden = !requireDeposit;
+  valueGroup.hidden = type === 'treatment';
+  const symbol = (CURRENCIES[document.getElementById('sCurrency')?.value] || currentCurrency()).symbol;
+  label.textContent = type === 'percent' ? 'Porcentaje (%)' : `Monto (${symbol})`;
+  if (type === 'percent') valueInput.max = '100'; else valueInput.removeAttribute('max');
 
-function removeSettingsSlot(index) {
-  uiState.settingsDraftSlots.splice(index, 1);
-  rerenderSettingsKeepingValues();
-}
-
-// Re-dibuja la vista sin perder lo que la usuaria ya escribió
-function rerenderSettingsKeepingValues() {
-  uiState.settings = { ...uiState.settings, ...collectSettingsForm() };
-  renderWorkspace();
+  const t = state.treatments[0];
+  if (!preview || !t) return;
+  const value = Number(valueInput.value) || 0;
+  const deposit = !requireDeposit ? 0
+    : type === 'fixed' ? value
+      : type === 'percent' ? Math.round(t.price * Math.min(100, value) / 100)
+        : t.depositRequired;
+  const fmt = n => `${symbol} ${Number(n || 0).toLocaleString('es-DO')}`;
+  preview.textContent = deposit > 0
+    ? `Ejemplo: "${t.name}" (${fmt(t.price)}) → depósito de ${fmt(deposit)} al reservar y ${fmt(t.price - deposit)} al finalizar.`
+    : `Ejemplo: "${t.name}" → sin depósito; la clienta paga ${fmt(t.price)} al finalizar y la cita queda confirmada.`;
 }
 
 function collectSettingsForm() {
   const val = id => document.getElementById(id)?.value ?? '';
-  const openDays = [...document.querySelectorAll('input[name="sOpenDay"]:checked')].map(i => Number(i.value));
+  const weeklyScheduleData = [...document.querySelectorAll('.settings-weekday')].map(row => ({
+    day: Number(row.dataset.day),
+    open: row.querySelector('.sDayOpen').checked,
+    start: row.querySelector('.sDayStart').value,
+    end: row.querySelector('.sDayEnd').value
+  }));
   return {
     businessName: val('sBusinessName').trim(),
     tagline: val('sTagline').trim(),
@@ -1070,12 +1169,17 @@ function collectSettingsForm() {
     instagram: val('sInstagram').trim(),
     address: val('sAddress').trim(),
     welcomeMessage: val('sWelcome'),
+    currency: val('sCurrency'),
+    language: val('sLanguage'),
     whatsapp: val('sWhatsapp').trim(),
+    requireDeposit: document.getElementById('sRequireDeposit')?.checked ?? true,
+    depositType: val('sDepositType'),
+    depositValue: Number(val('sDepositValue')) || 0,
     depositInstructions: val('sDeposit'),
     cancellationPolicy: val('sPolicy'),
+    weeklySchedule: weeklyScheduleData,
+    slotInterval: Number(val('sSlotInterval')),
     bookingEnabled: document.getElementById('sBookingEnabled')?.checked ?? true,
-    requireDeposit: document.getElementById('sRequireDeposit')?.checked ?? true,
-    closedWeekdays: [0, 1, 2, 3, 4, 5, 6].filter(d => !openDays.includes(d)),
     minHoursNotice: Number(val('sMinHours')),
     maxDaysAhead: Number(val('sMaxDays')),
     maxActiveBookings: Number(val('sMaxActive')),
@@ -1088,12 +1192,17 @@ async function saveSettings(event) {
   event.preventDefault();
   const msg = document.getElementById('settingsMsg');
   const btn = document.getElementById('settingsSaveBtn');
-  const body = { ...collectSettingsForm(), slots: uiState.settingsDraftSlots || [] };
+  const body = collectSettingsForm();
+  const badDay = body.weeklySchedule.find(d => d.open && (!d.start || !d.end || d.end <= d.start));
+  if (badDay) {
+    msg.textContent = `Revisa el horario del ${WEEKDAY_LABELS[badDay.day]}: la hora de cierre debe ser después de la apertura.`;
+    msg.hidden = false;
+    return;
+  }
   btn.disabled = true;
   try {
     const data = await adminApi('/api/admin/settings', { method: 'PUT', body });
     uiState.settings = data.settings;
-    uiState.settingsDraftSlots = [...data.settings.slots];
     showToast('Configuración guardada.');
     renderWorkspace();
   } catch (err) {
@@ -1199,8 +1308,110 @@ function adminLogout() {
   showAdminGate('Sesión cerrada.');
 }
 
+// ============================================================================
+// MONEDA, DEPÓSITO Y HORARIO LABORAL (según Configuración)
+// ============================================================================
+const CURRENCIES = {
+  DOP: { symbol: 'RD$', decimals: 0, label: 'Peso dominicano (RD$)' },
+  USD: { symbol: 'US$', decimals: 2, label: 'Dólar estadounidense (US$)' },
+  EUR: { symbol: '€', decimals: 2, label: 'Euro (€)' },
+  MXN: { symbol: 'MX$', decimals: 2, label: 'Peso mexicano (MX$)' },
+  COP: { symbol: 'COL$', decimals: 0, label: 'Peso colombiano (COL$)' },
+  PEN: { symbol: 'S/', decimals: 2, label: 'Sol peruano (S/)' },
+  CLP: { symbol: 'CLP$', decimals: 0, label: 'Peso chileno (CLP$)' },
+  ARS: { symbol: 'AR$', decimals: 0, label: 'Peso argentino (AR$)' },
+  GTQ: { symbol: 'Q', decimals: 2, label: 'Quetzal (Q)' },
+  CRC: { symbol: '₡', decimals: 0, label: 'Colón costarricense (₡)' }
+};
+
+const DEFAULT_WEEKLY_SCHEDULE = [
+  { day: 0, open: false, start: '09:00', end: '13:00' },
+  { day: 1, open: true, start: '09:00', end: '18:00' },
+  { day: 2, open: true, start: '09:00', end: '18:00' },
+  { day: 3, open: true, start: '09:00', end: '18:00' },
+  { day: 4, open: true, start: '09:00', end: '18:00' },
+  { day: 5, open: true, start: '09:00', end: '18:00' },
+  { day: 6, open: true, start: '09:00', end: '14:00' }
+];
+
+function currentCurrency() {
+  return CURRENCIES[uiState?.settings?.currency] || CURRENCIES.DOP;
+}
+
+// Monto que se cobra al reservar un tratamiento (0 = paga todo al finalizar)
+function depositForTreatment(treatment) {
+  const st = uiState.settings || {};
+  if (!treatment || st.requireDeposit === false) return 0;
+  if (st.depositType === 'fixed') return Math.max(0, Math.round(Number(st.depositValue) || 0));
+  if (st.depositType === 'percent') {
+    const pct = Math.min(100, Math.max(0, Number(st.depositValue) || 0));
+    return Math.round((Number(treatment.price) || 0) * pct / 100);
+  }
+  return Math.max(0, Number(treatment.depositRequired) || 0);
+}
+
+function hhmmToMinutes(value) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || ''));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+function minutesToSlot(total) {
+  const h = Math.floor(total / 60);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${String(h12).padStart(2, '0')}:${String(total % 60).padStart(2, '0')} ${suffix}`;
+}
+
+function weeklySchedule() {
+  const weekly = uiState.settings?.weeklySchedule;
+  return Array.isArray(weekly) && weekly.length === 7 ? weekly : DEFAULT_WEEKLY_SCHEDULE;
+}
+
+function dayScheduleFor(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const weekday = new Date(y, m - 1, d).getDay();
+  return weeklySchedule().find(s => s.day === weekday) || null;
+}
+
+function isClosedDay(dateStr) {
+  const day = dayScheduleFor(dateStr);
+  return !day || !day.open;
+}
+
+function treatmentDuration(treatmentId) {
+  return Number(state.treatments.find(t => t.id === treatmentId)?.durationMin) || 60;
+}
+
+// Horarios del día con su estado: 'available' o 'taken' (se cruza con otra cita activa)
+function slotStatusesFor({ date, specialistId, treatmentId, ignoreAppointmentId }) {
+  const day = dayScheduleFor(date);
+  const interval = Math.max(10, Number(uiState.settings?.slotInterval) || 30);
+  const duration = treatmentDuration(treatmentId);
+  let start;
+  let end;
+  if (day && day.open) {
+    start = hhmmToMinutes(day.start);
+    end = hhmmToMinutes(day.end);
+  } else {
+    // Día cerrado: el equipo aún puede agendar manualmente en un rango amplio
+    start = 8 * 60;
+    end = 20 * 60;
+  }
+  const busy = state.appointments
+    .filter(a => a.date === date && a.specialistId === specialistId && a.id !== ignoreAppointmentId &&
+      ACTIVE_APPOINTMENT_STATUSES.includes(a.status))
+    .map(a => ({ start: slotMinutes(a.time), dur: treatmentDuration(a.treatmentId) }));
+  const result = [];
+  for (let t = start; t + duration <= end; t += interval) {
+    const taken = busy.some(b => t < b.start + b.dur && b.start < t + duration);
+    result.push({ time: minutesToSlot(t), status: taken ? 'taken' : 'available' });
+  }
+  return result;
+}
+
 function formatMoney(amount) {
-  return `RD$ ${Number(amount || 0).toLocaleString('es-DO')}`;
+  const cur = currentCurrency();
+  return `${cur.symbol} ${Number(amount || 0).toLocaleString('es-DO', { maximumFractionDigits: cur.decimals })}`;
 }
 
 function showToast(message) {
@@ -1271,7 +1482,6 @@ document.addEventListener('keydown', (e) => {
 
 function switchView(viewName) {
   if ((viewName === 'team' || viewName === 'settings') && !isStaffManager()) viewName = 'dashboard';
-  if (viewName === 'settings' && uiState.currentView !== 'settings') uiState.settingsDraftSlots = null;
   const viewChanged = uiState.currentView !== viewName;
   uiState.currentView = viewName;
   toggleMobileMenu(false);
@@ -1332,6 +1542,7 @@ function renderWorkspace() {
       break;
     case 'settings':
       container.innerHTML = renderSettingsView();
+      updateSettingsPreview();
       break;
     case 'client-portal':
       container.innerHTML = renderClientPortalView();
@@ -1363,8 +1574,7 @@ function renderDashboardView() {
 
   const lowStockItems = state.inventory.filter(i => i.stock <= i.minStock);
 
-  const filteredAppointments = state.appointments.filter(a => {
-    if (!uiState.searchQuery) return true;
+  const filteredAppointments = !uiState.searchQuery ? appointmentsOfDay(uiState.selectedDate) : state.appointments.filter(a => {
     const q = uiState.searchQuery.toLowerCase();
     return (
       a.patientName.toLowerCase().includes(q) ||
@@ -1449,8 +1659,8 @@ function renderDashboardView() {
       <div class="surface-card">
         <div class="card-header">
           <div>
-            <h2>Próximas Citas y Sesiones en Cabina</h2>
-            <p style="font-size:0.8rem;color:var(--text-secondary);">Haz clic en el expediente de cada clienta para ver sus fotos de mejoría o registrar su sesión</p>
+            <h2>${uiState.searchQuery ? 'Resultados de búsqueda' : `Citas del ${escapeHTML(formatDateLong(uiState.selectedDate))}`}</h2>
+            <p style="font-size:0.8rem;color:var(--text-secondary);">${uiState.searchQuery ? `${filteredAppointments.length} cita(s) encontradas` : 'Toca un día en el calendario para ver sus citas.'}</p>
           </div>
           <button class="btn-soft btn-sm" onclick="switchView('agenda')">Ver Agenda Completa</button>
         </div>
@@ -1464,7 +1674,12 @@ function renderDashboardView() {
         </div>
 
         <div class="list-rows">
-          ${filteredAppointments.map(app => renderAppointmentRow(app)).join('')}
+          ${filteredAppointments.length ? filteredAppointments.map(app => renderAppointmentRow(app)).join('') : `
+            <div style="padding:28px;text-align:center;color:var(--text-secondary);display:flex;flex-direction:column;align-items:center;gap:12px;">
+              <span>${isClosedDay(uiState.selectedDate) ? 'Día cerrado. ' : ''}No hay citas este día.</span>
+              <button class="btn-soft btn-sm" onclick="openAppointmentModal(null, '${uiState.selectedDate}')">＋ Agendar este día</button>
+            </div>
+          `}
         </div>
       </div>
 
@@ -1592,13 +1807,20 @@ function renderCalendarWidget(contextMode) {
     const dStr = String(d).padStart(2, '0');
     const fullDate = `${year}-${mStr}-${dStr}`;
     const isSelected = fullDate === activeDate;
-    const hasEvent = appointmentDates.has(fullDate) || (contextMode === 'portal' && [15, 17, 21, 24, 28].includes(d));
+    const hasEvent = appointmentDates.has(fullDate);
+    const closed = isClosedDay(fullDate);
+    const isToday = fullDate === toISODate(new Date());
+    // En la vista previa del portal, las clientas no pueden elegir días cerrados ni pasados
+    const portalBlocked = contextMode === 'portal' && (closed || fullDate < toISODate(new Date()));
     const clickHandler = contextMode === 'portal'
       ? `selectPortalDate('${fullDate}')`
       : `selectAdminDate('${fullDate}')`;
+    const count = contextMode === 'portal' ? 0 : state.appointments.filter(a => a.date === fullDate && a.status !== 'Cancelada').length;
 
     cells += `
-      <button class="cal-day ${isSelected ? 'selected' : ''} ${hasEvent ? 'has-events' : ''}" onclick="${clickHandler}">
+      <button class="cal-day ${isSelected ? 'selected' : ''} ${hasEvent ? 'has-events' : ''} ${closed ? 'closed' : ''} ${isToday ? 'today' : ''}"
+              ${portalBlocked ? 'disabled' : `onclick="${clickHandler}"`}
+              aria-label="${d}${count ? `, ${count} cita(s)` : ''}${closed ? ', cerrado' : ''}">
         <span>${d}</span>
         ${hasEvent ? '<span class="cal-dot"></span>' : ''}
       </button>
@@ -1635,6 +1857,58 @@ function changeCalendarMonth(delta) {
 function selectAdminDate(dateStr) {
   uiState.selectedDate = dateStr;
   renderWorkspace();
+  openDayAppointmentsSheet(dateStr);
+}
+
+function appointmentsOfDay(dateStr) {
+  return state.appointments
+    .filter(a => a.date === dateStr)
+    .sort((a, b) => slotMinutes(a.time) - slotMinutes(b.time));
+}
+
+// Hoja con las citas del día elegido en el calendario
+function openDayAppointmentsSheet(dateStr) {
+  const list = appointmentsOfDay(dateStr);
+  const day = dayScheduleFor(dateStr);
+  const active = list.filter(a => a.status !== 'Cancelada').length;
+  const statusClass = st => (st === 'Cancelada' ? 'status-danger' : (st === 'Confirmada' || st === 'Completada') ? 'status-confirmed' : 'status-pending');
+  openModalWithHTML(
+    `Citas del ${formatDateLong(dateStr)}`,
+    `
+      <p class="day-sheet-meta">
+        ${day && day.open ? `Horario: ${escapeHTML(day.start)} – ${escapeHTML(day.end)}` : 'Día cerrado según Configuración'}
+        • ${active} cita(s) activa(s)
+      </p>
+      ${list.length ? `
+        <div class="day-appt-list">
+          ${list.map(a => `
+            <article class="day-appt">
+              <div class="day-appt-time">${escapeHTML(a.time)}</div>
+              <div class="day-appt-body">
+                <h4>${escapeHTML(a.patientName)}</h4>
+                <p>${escapeHTML(a.treatmentName)} • ${escapeHTML(a.specialistName)}</p>
+                <div class="day-appt-foot">
+                  <span class="status-pill ${statusClass(a.status)}"><span class="dot"></span>${escapeHTML(a.status)}</span>
+                  <span class="day-appt-actions">
+                    <button class="round-action-btn whatsapp-btn" title="WhatsApp" aria-label="WhatsApp" onclick="sendAppointmentWhatsApp('${escapeHTML(a.id)}')">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2z"/></svg>
+                    </button>
+                    ${a.status === 'Pendiente Depósito' ? `<button class="round-action-btn" title="Confirmar cita" onclick="openConfirmAppointmentModal('${escapeHTML(a.id)}')">💳</button>` : ''}
+                    ${a.status !== 'Completada' && a.status !== 'Cancelada' ? `<button class="round-action-btn" title="Completar y cobrar" onclick="openCompleteSessionModal('${escapeHTML(a.id)}')">✓</button>` : ''}
+                    <button class="round-action-btn" title="Ver expediente" onclick="closeModal(); openPatientRecord('${escapeHTML(a.patientId)}')">📋</button>
+                  </span>
+                </div>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      ` : `<div class="day-empty">No hay citas este día.</div>`}
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cerrar</button>
+      <button class="btn-gold" onclick="openAppointmentModal(null, '${escapeHTML(dateStr)}')">＋ Agendar este día</button>
+    `
+  );
 }
 
 function selectPortalDate(dateStr) {
@@ -1714,7 +1988,7 @@ function openConfirmAppointmentModal(appointmentId) {
   const app = state.appointments.find(a => a.id === appointmentId);
   if (!app || app.status !== 'Pendiente Depósito') return;
   const treatment = state.treatments.find(t => t.id === app.treatmentId);
-  const suggested = treatment ? treatment.depositRequired : 0;
+  const suggested = depositForTreatment(treatment) || (treatment ? treatment.depositRequired : 0);
   openModalWithHTML(
     `Confirmar cita — ${app.patientName}`,
     `
@@ -1748,7 +2022,7 @@ function confirmAppointmentDeposit(appointmentId) {
   if (!app || app.status !== 'Pendiente Depósito') return;
   const amountInput = document.getElementById('mDepAmount');
   const treatment = state.treatments.find(t => t.id === app.treatmentId);
-  const deposit = amountInput ? Number(amountInput.value) : (treatment ? treatment.depositRequired : 0);
+  const deposit = amountInput ? Number(amountInput.value) : depositForTreatment(treatment);
   if (!(deposit > 0)) {
     showToast('Escribe el monto del depósito recibido.');
     return;
@@ -1991,7 +2265,7 @@ function renderPatientsView() {
                 ${renderSkinMetricBar('Uniformidad de Tono / Despigmentación', p.metrics.toneUniformity.before, p.metrics.toneUniformity.current)}
                 ${renderSkinMetricBar('Textura, Firmeza y Poros', p.metrics.texturePores.before, p.metrics.texturePores.current)}
                 ${renderSkinMetricBar('Control de Imperfecciones y Eritema', p.metrics.blemishControl.before, p.metrics.blemishControl.current)}
-                <div style="font-size:0.78rem;color:var(--text-secondary);background:#FAF6EE;padding:10px 12px;border-radius:10px;border:1px solid var(--border-card);">
+                <div style="font-size:0.78rem;color:var(--text-secondary);background:#FAF8F3;padding:10px 12px;border-radius:10px;border:1px solid var(--border-card);">
                   <strong>Alergias / Precauciones:</strong> ${p.allergies}
                 </div>
               </div>
@@ -2276,7 +2550,7 @@ function renderTreatmentsView() {
           <div style="border-top:1px solid var(--border-light);padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
             <div>
               <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);">${formatMoney(t.price)}</div>
-              <div style="font-size:0.76rem;color:var(--gold-hover);">Depósito reserva: ${formatMoney(t.depositRequired)}</div>
+              <div style="font-size:0.76rem;color:var(--gold-hover);">${depositForTreatment(t) ? `Depósito reserva: ${formatMoney(depositForTreatment(t))}` : 'Sin depósito • paga al finalizar'}</div>
             </div>
             <div style="display:flex;gap:6px;">
               ${isStaffManager() ? `<button class="btn-soft btn-sm danger-soft" onclick="askDelete('treatment', '${t.id}')" aria-label="Eliminar ${escapeHTML(t.name)}">Eliminar</button>` : ''}
@@ -2526,14 +2800,23 @@ function renderClientPortalView() {
               <label style="font-size:0.75rem;font-weight:700;text-transform:uppercase;color:var(--text-secondary);display:block;margin-bottom:6px;">
                 Paso 3: Horario Disponible (${uiState.portalSelectedDate})
               </label>
-              <div class="phone-slots-grid">
-                ${['10:00 AM', '02:30 PM', '04:30 PM'].map(slot => `
-                  <button class="phone-slot-pill ${uiState.portalSelectedSlot === slot ? 'selected' : ''}"
-                          onclick="selectPortalSlot('${slot}')">
-                    ${slot}
-                  </button>
-                `).join('')}
-              </div>
+              ${(() => {
+                const slots = portalPreviewSlots();
+                if (!slots.length) {
+                  return `<div class="slot-empty">${isClosedDay(uiState.portalSelectedDate) ? 'El estudio no abre ese día.' : 'No quedan horarios ese día.'}</div>`;
+                }
+                return `
+                  <div class="phone-slots-grid">
+                    ${slots.map(s => `
+                      <button class="phone-slot-pill ${uiState.portalSelectedSlot === s.time ? 'selected' : ''} ${s.status === 'taken' ? 'taken' : ''}"
+                              ${s.status === 'taken' ? 'disabled aria-disabled="true" title="Ya hay una cita en este horario"' : `onclick="selectPortalSlot('${s.time}')"`}>
+                        ${s.time}
+                        ${s.status === 'taken' ? '<small>Ocupado</small>' : ''}
+                      </button>
+                    `).join('')}
+                  </div>
+                `;
+              })()}
             </div>
 
             <button class="phone-cta-btn" onclick="submitClientPortalBooking()">
@@ -2622,7 +2905,7 @@ function renderClientPortalView() {
             </h3>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px;">
               ${clientAppointments.map(app => `
-                <div style="background:#FAF8F4;border:1px solid var(--border-card);border-radius:12px;padding:14px;">
+                <div style="background:#FBFAF7;border:1px solid var(--border-card);border-radius:12px;padding:14px;">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <strong style="font-size:0.88rem;">📅 ${app.date} • ${app.time}</strong>
                     <span class="status-pill status-confirmed"><span class="dot"></span>${app.status}</span>
@@ -2673,11 +2956,37 @@ function renderClientPortalView() {
   `;
 }
 
+// Horarios de la vista previa del portal: los que ya tienen cita aparecen deshabilitados
+function portalPreviewSlots() {
+  const date = uiState.portalSelectedDate;
+  if (isClosedDay(date)) return [];
+  const now = new Date();
+  const todayIso = toISODate(now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const slots = slotStatusesFor({
+    date,
+    specialistId: uiState.portalSelectedSpecialistId,
+    treatmentId: uiState.portalSelectedTreatmentId
+  }).filter(s => date > todayIso || (date === todayIso && slotMinutes(s.time) > nowMinutes));
+  const selected = slots.find(s => s.time === uiState.portalSelectedSlot);
+  if (!selected || selected.status !== 'available') {
+    uiState.portalSelectedSlot = slots.find(s => s.status === 'available')?.time || '';
+  }
+  return slots;
+}
+
 function submitClientPortalBooking() {
   const client = state.patients.find(p => p.id === uiState.portalClientId);
   const specialist = state.specialists.find(s => s.id === uiState.portalSelectedSpecialistId);
   const treatment = state.treatments.find(t => t.id === uiState.portalSelectedTreatmentId);
   if (!client || !specialist || !treatment) return;
+  const slot = portalPreviewSlots().find(s => s.time === uiState.portalSelectedSlot);
+  if (!slot || slot.status !== 'available') {
+    showToast('Elige un horario disponible.');
+    renderWorkspace();
+    return;
+  }
+  const deposit = depositForTreatment(treatment);
 
   const newAppointment = {
     id: 'cita-' + Date.now(),
@@ -2692,20 +3001,12 @@ function submitClientPortalBooking() {
     date: uiState.portalSelectedDate,
     time: uiState.portalSelectedSlot,
     price: treatment.price,
-    depositPaid: treatment.depositRequired,
-    status: 'Confirmada'
+    depositPaid: 0,
+    paymentMode: deposit > 0 ? 'deposito' : 'al-finalizar',
+    status: deposit > 0 ? 'Pendiente Depósito' : 'Confirmada'
   };
 
   state.appointments.unshift(newAppointment);
-  state.finances.unshift({
-    id: 'fin-' + Date.now(),
-    date: uiState.portalSelectedDate,
-    concept: `Reserva Online (${treatment.name}) — ${client.name}`,
-    category: 'Depósito de Reserva',
-    type: 'Ingreso',
-    method: 'Pago Online Portal Cliente',
-    amount: treatment.depositRequired
-  });
 
   saveState();
   showToast(`¡Cita agendada con éxito para ${client.name} el ${uiState.portalSelectedDate} a las ${uiState.portalSelectedSlot}!`);
@@ -2727,7 +3028,35 @@ function openModalWithHTML(title, bodyHTML, footerHTML) {
   document.getElementById('modalBackdrop').classList.add('open');
 }
 
-function openAppointmentModal(preselectedTreatmentId) {
+function refreshAppointmentTimeOptions() {
+  const date = document.getElementById('mAppDate')?.value;
+  const select = document.getElementById('mAppTime');
+  const hint = document.getElementById('mAppTimeHint');
+  if (!date || !select) return;
+  const slots = slotStatusesFor({
+    date,
+    specialistId: document.getElementById('mAppSpecialist').value,
+    treatmentId: document.getElementById('mAppTreatment').value
+  });
+  const previous = select.value;
+  select.innerHTML = slots.map(s => `
+    <option value="${s.time}" ${s.status === 'taken' ? 'disabled' : ''} ${s.time === previous && s.status === 'available' ? 'selected' : ''}>
+      ${s.time}${s.status === 'taken' ? ' — ocupado' : ''}
+    </option>
+  `).join('');
+  if (!select.value || select.selectedOptions[0]?.disabled) {
+    const first = slots.find(s => s.status === 'available');
+    if (first) select.value = first.time;
+  }
+  if (hint) {
+    const free = slots.filter(s => s.status === 'available').length;
+    hint.textContent = isClosedDay(date)
+      ? 'Este día está cerrado en Configuración; puedes agendar igualmente.'
+      : free ? `${free} horario(s) libre(s) para esta especialista.` : 'No quedan horarios libres para esta especialista.';
+  }
+}
+
+function openAppointmentModal(preselectedTreatmentId, preselectedDate) {
   const tId = preselectedTreatmentId || state.treatments[0]?.id;
   openModalWithHTML(
     'Agendar Nueva Cita en Niskin Beauty Studio',
@@ -2740,26 +3069,25 @@ function openAppointmentModal(preselectedTreatmentId) {
       </div>
       <div class="form-group">
         <label>Tratamiento / Protocolo</label>
-        <select id="mAppTreatment" class="form-control">
+        <select id="mAppTreatment" class="form-control" onchange="refreshAppointmentTimeOptions()">
           ${state.treatments.map(t => `<option value="${t.id}" ${t.id === tId ? 'selected' : ''}>${t.name} — ${formatMoney(t.price)}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
         <label>Especialista Asignada</label>
-        <select id="mAppSpecialist" class="form-control">
+        <select id="mAppSpecialist" class="form-control" onchange="refreshAppointmentTimeOptions()">
           ${state.specialists.map(s => `<option value="${s.id}">${s.name} (${s.role})</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Fecha de la Cita</label>
-          <input type="date" id="mAppDate" class="form-control" value="${uiState.selectedDate}">
+          <input type="date" id="mAppDate" class="form-control" value="${preselectedDate || uiState.selectedDate}" onchange="refreshAppointmentTimeOptions()">
         </div>
         <div class="form-group">
           <label>Hora</label>
-          <select id="mAppTime" class="form-control">
-            ${(studioSettings().slots || ['09:00 AM', '10:00 AM', '11:30 AM', '02:30 PM', '04:00 PM', '05:30 PM']).map(slot => `<option>${escapeHTML(slot)}</option>`).join('')}
-          </select>
+          <select id="mAppTime" class="form-control"></select>
+          <span id="mAppTimeHint" style="font-size:0.74rem;color:var(--text-muted);"></span>
         </div>
       </div>
       <div class="form-group">
@@ -2776,6 +3104,7 @@ function openAppointmentModal(preselectedTreatmentId) {
       <button class="btn-gold" onclick="saveNewAppointment()">Guardar Cita</button>
     `
   );
+  refreshAppointmentTimeOptions();
 }
 
 function saveNewAppointment() {
@@ -2792,8 +3121,13 @@ function saveNewAppointment() {
   const trat = state.treatments.find(t => t.id === tratId);
   const esp = state.specialists.find(s => s.id === espId);
   if (!pat || !trat || !esp) return;
+  const slot = slotStatusesFor({ date, specialistId: espId, treatmentId: tratId }).find(s => s.time === time);
+  if (!time || !slot || slot.status !== 'available') {
+    showToast('Ese horario ya está ocupado para esta especialista. Elige otro.');
+    return;
+  }
 
-  const deposit = status === 'Confirmada' && !payAtEnd ? trat.depositRequired : 0;
+  const deposit = status === 'Confirmada' && !payAtEnd ? (depositForTreatment(trat) || trat.depositRequired) : 0;
 
   state.appointments.unshift({
     id: 'cita-' + Date.now(),

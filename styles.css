@@ -2,23 +2,23 @@
   /* Tema claro fijo: evita que el modo oscuro del sistema/navegador cambie los colores */
   color-scheme: only light;
 
-  /* Warm Cream & Gold Palette extracted from Niskin Wireframes & Logo */
-  --bg-canvas: #F5F2EB;
-  --bg-sidebar: #FAF8F4;
+  /* Paleta "Minimal 01 · Marfil esencial" (marfil, tinta cálida y dorado) */
+  --bg-canvas: #F7F5F0;
+  --bg-sidebar: #FBFAF7;
   --bg-surface: #FFFFFF;
-  --bg-subtle: #F2EDE4;
-  --bg-subtle-hover: #EAE3D6;
-  --bg-selected: #EFEAE1;
+  --bg-subtle: #F6F3ED;
+  --bg-subtle-hover: #EEE9E1;
+  --bg-selected: #F5F1E9;
 
-  --gold-primary: #A8844A;
-  --gold-hover: #937039;
-  --gold-light: #DFC9A3;
-  --gold-soft: #F6EFE2;
-  --gold-border: #D5C3A3;
+  --gold-primary: #B18B4A;
+  --gold-hover: #977538;
+  --gold-light: #DFCDA8;
+  --gold-soft: #F8F3EA;
+  --gold-border: #D6C39D;
 
-  --text-primary: #3C3226;
-  --text-secondary: #766958;
-  --text-muted: #A39686;
+  --text-primary: #37332F;
+  --text-secondary: #777168;
+  --text-muted: #A39A8F;
 
   /* Status & Pastel Accents from Wireframe 1 */
   --pastel-rose: #E5D4CE;
@@ -32,24 +32,24 @@
   --pastel-blue: #D7E1E8;
   --pastel-blue-text: #49667A;
 
-  --status-success-bg: #EBF2ED;
-  --status-success-dot: #4C875A;
-  --status-success-text: #3A6B46;
+  --status-success-bg: #EEF3EE;
+  --status-success-dot: #739076;
+  --status-success-text: #5E7A62;
 
-  --status-warning-bg: #F9EFE0;
-  --status-warning-dot: #C28A38;
-  --status-warning-text: #8F6220;
+  --status-warning-bg: #F8F1E4;
+  --status-warning-dot: #B58A45;
+  --status-warning-text: #8F6A31;
 
   --status-danger-bg: #F9E9E8;
   --status-danger-dot: #C95B54;
   --status-danger-text: #943B35;
 
-  --border-light: #ECE6DC;
-  --border-card: #E6DFD3;
+  --border-light: #ECE8E1;
+  --border-card: #E9E4DC;
 
-  --shadow-sm: 0 4px 14px rgba(110, 88, 53, 0.05);
-  --shadow-md: 0 10px 28px rgba(110, 88, 53, 0.08);
-  --shadow-lg: 0 18px 42px rgba(92, 71, 38, 0.13);
+  --shadow-sm: 0 4px 14px rgba(81, 70, 56, 0.05);
+  --shadow-md: 0 10px 28px rgba(81, 70, 56, 0.08);
+  --shadow-lg: 0 18px 42px rgba(81, 70, 56, 0.13);
 
   --radius-sm: 10px;
   --radius-md: 16px;
@@ -66,16 +66,16 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: only light;
-    --bg-canvas: #F5F2EB;
-    --bg-sidebar: #FAF8F4;
+    --bg-canvas: #F7F5F0;
+    --bg-sidebar: #FBFAF7;
     --bg-surface: #FFFFFF;
-    --text-primary: #3C3226;
-    --text-secondary: #766958;
+    --text-primary: #37332F;
+    --text-secondary: #777168;
   }
   html,
   body {
-    background-color: #F5F2EB;
-    color: #3C3226;
+    background-color: #F7F5F0;
+    color: #37332F;
   }
 }
 
@@ -91,7 +91,7 @@
 
 html {
   color-scheme: only light;
-  background-color: #F5F2EB;
+  background-color: #F7F5F0;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -222,7 +222,7 @@ a.nav-item {
 }
 
 .nav-item.portal-highlight:hover {
-  background: #EFE3CE;
+  background: #F2EBDD;
 }
 
 .sidebar-profile {
@@ -239,8 +239,8 @@ a.nav-item {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #DECBB1;
-  color: #6B5027;
+  background: #EEE5D8;
+  color: #5C4C35;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -366,7 +366,7 @@ a.nav-item {
 .mode-btn.active {
   background: var(--gold-primary);
   color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(168, 132, 74, 0.3);
+  box-shadow: 0 2px 8px rgba(177, 139, 74, 0.3);
 }
 
 .search-pill {
@@ -455,7 +455,7 @@ a.nav-item {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(168, 132, 74, 0.25);
+  box-shadow: 0 4px 12px rgba(177, 139, 74, 0.25);
   transition: all 0.2s ease;
   font-family: inherit;
 }
@@ -645,7 +645,7 @@ a.nav-item {
 }
 
 .list-row:hover {
-  background: #FCFBF8;
+  background: #FCFBF9;
 }
 
 .row-entity {
@@ -894,7 +894,7 @@ a.nav-item {
 }
 
 .cal-day.has-events {
-  background: #F4EFE6;
+  background: #F6F2EA;
   font-weight: 600;
 }
 
@@ -902,7 +902,21 @@ a.nav-item {
   background: var(--gold-primary) !important;
   color: #FFFFFF !important;
   font-weight: 700;
-  box-shadow: 0 3px 10px rgba(168, 132, 74, 0.35);
+  box-shadow: 0 3px 10px rgba(177, 139, 74, 0.35);
+}
+
+.cal-day.today:not(.selected) {
+  box-shadow: inset 0 0 0 1.5px var(--gold-primary);
+}
+
+.cal-day.closed:not(.selected) {
+  color: var(--text-muted);
+  background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(55, 51, 47, 0.04) 4px 6px);
+}
+
+.cal-day:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .cal-dot {
@@ -969,7 +983,7 @@ a.nav-item {
 }
 
 .patient-Selector-item:hover {
-  background: #FAF7F2;
+  background: #FAF9F6;
 }
 
 .patient-Selector-item.active {
@@ -979,7 +993,7 @@ a.nav-item {
 
 .clinical-detail-header {
   padding: 22px 26px;
-  background: linear-gradient(135deg, #FAF6EE 0%, #F3ECE0 100%);
+  background: linear-gradient(135deg, #FAF8F3 0%, #F4F0E8 100%);
   border-bottom: 1px solid var(--border-card);
   display: flex;
   align-items: center;
@@ -1029,7 +1043,7 @@ a.nav-item {
   border: 2px solid var(--gold-border);
   box-shadow: var(--shadow-md);
   user-select: none;
-  background: #EFE9DF;
+  background: #F1EDE6;
 }
 
 .ba-img-layer {
@@ -1068,13 +1082,13 @@ a.nav-item {
 
 .ba-label-before {
   left: 12px;
-  background: rgba(60, 50, 38, 0.78);
+  background: rgba(55, 51, 47, 0.78);
   color: #FFFFFF;
 }
 
 .ba-label-after {
   right: 12px;
-  background: rgba(168, 132, 74, 0.92);
+  background: rgba(177, 139, 74, 0.92);
   color: #FFFFFF;
 }
 
@@ -1115,7 +1129,7 @@ a.nav-item {
 }
 
 .metric-item {
-  background: #FAF8F4;
+  background: #FBFAF7;
   border: 1px solid var(--border-light);
   border-radius: 12px;
   padding: 12px 14px;
@@ -1136,7 +1150,7 @@ a.nav-item {
 }
 
 .routine-box {
-  background: #FAF8F4;
+  background: #FBFAF7;
   border: 1px solid var(--border-light);
   border-radius: 14px;
   padding: 16px 18px;
@@ -1158,7 +1172,7 @@ a.nav-item {
 }
 
 .session-card {
-  background: #FAF8F4;
+  background: #FBFAF7;
   border: 1px solid var(--border-light);
   border-left: 4px solid var(--gold-primary);
   border-radius: 12px;
@@ -1186,9 +1200,9 @@ a.nav-item {
 
 /* Exact Mobile Frame from Wireframe 3 */
 .phone-mockup {
-  background: #FAF8F4;
+  background: #FBFAF7;
   border-radius: 36px;
-  border: 8px solid #EFEAE1;
+  border: 8px solid #F5F1E9;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   width: 100%;
@@ -1232,7 +1246,7 @@ a.nav-item {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  background: #FCFBF8;
+  background: #FCFBF9;
 }
 
 /* Search/Client Status Pill Bar with Gold Circle from Wireframe 3 */
@@ -1289,7 +1303,7 @@ a.nav-item {
 .phone-select-card.selected {
   border-color: var(--gold-primary);
   background: #FFFDF9;
-  box-shadow: 0 6px 18px rgba(168, 132, 74, 0.12);
+  box-shadow: 0 6px 18px rgba(177, 139, 74, 0.12);
 }
 
 .phone-card-left {
@@ -1302,7 +1316,7 @@ a.nav-item {
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: #EADFD5;
+  background: #EEE5D8;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1354,7 +1368,7 @@ a.nav-item {
   background: var(--gold-primary);
   color: #FFFFFF;
   border-color: var(--gold-primary);
-  box-shadow: 0 4px 12px rgba(168, 132, 74, 0.28);
+  box-shadow: 0 4px 12px rgba(177, 139, 74, 0.28);
 }
 
 /* Bottom Full-Width Gold CTA Button with Chevron from Wireframe 3 */
@@ -1371,7 +1385,7 @@ a.nav-item {
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  box-shadow: 0 6px 18px rgba(168, 132, 74, 0.3);
+  box-shadow: 0 6px 18px rgba(177, 139, 74, 0.3);
   font-family: inherit;
   transition: background 0.2s;
 }
@@ -1386,7 +1400,7 @@ a.nav-item {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(45, 35, 22, 0.45);
+  background: rgba(55, 51, 47, 0.45);
   backdrop-filter: blur(3px);
   display: none;
   align-items: center;
@@ -1453,7 +1467,7 @@ a.nav-item {
   padding: 10px 13px;
   border-radius: 10px;
   border: 1px solid var(--border-card);
-  background: #FAF8F4;
+  background: #FBFAF7;
   font-family: inherit;
   font-size: 0.88rem;
   color: var(--text-primary);
@@ -1519,7 +1533,7 @@ select.form-control,
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: radial-gradient(circle at 20% 0%, #FBF6EC 0%, var(--bg-canvas) 55%);
+  background: radial-gradient(circle at 20% 0%, #FBF8F2 0%, var(--bg-canvas) 55%);
   overflow-y: auto;
 }
 
@@ -1627,6 +1641,93 @@ select.form-control,
   padding: 7px 10px;
   font-size: 0.82rem;
   max-width: 170px;
+}
+
+/* Hoja de citas del día (calendario) */
+.day-sheet-meta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.day-appt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.day-appt {
+  display: flex;
+  gap: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--bg-surface);
+}
+
+.day-appt-time {
+  flex-shrink: 0;
+  width: 72px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-top: 2px;
+}
+
+.day-appt-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-appt-body h4 {
+  font-size: 0.92rem;
+}
+
+.day-appt-body p {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.day-appt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.day-appt-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.day-empty,
+.slot-empty {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  border-radius: 12px;
+  padding: 18px;
+  text-align: center;
+}
+
+/* Horarios ocupados: visibles pero deshabilitados */
+.phone-slot-pill.taken,
+.phone-slot-pill:disabled {
+  background: repeating-linear-gradient(135deg, var(--bg-subtle) 0 6px, #EFEBE4 6px 8px);
+  color: var(--text-muted);
+  border-style: dashed;
+  text-decoration: line-through;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.phone-slot-pill small {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: 0.3px;
 }
 
 /* Confirmar cita: con o sin depósito */
@@ -1737,11 +1838,98 @@ textarea.form-control {
   height: 22px;
   border-radius: 50%;
   border: none;
-  background: rgba(168, 132, 74, 0.18);
+  background: rgba(177, 139, 74, 0.18);
   color: var(--gold-hover);
   cursor: pointer;
   font-size: 0.9rem;
   line-height: 1;
+}
+
+.settings-week {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-weekday {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-surface);
+}
+
+.settings-weekday-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-weekday-name input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold-primary);
+}
+
+.settings-weekday-hours {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.settings-weekday-hours .form-control {
+  padding: 7px 6px;
+  min-width: 0;
+  width: 100%;
+  flex: 1 1 0;
+}
+
+.settings-weekday-hours span {
+  flex-shrink: 0;
+}
+
+.settings-weekday-closed {
+  display: none;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.settings-weekday.is-closed {
+  background: var(--bg-subtle);
+}
+
+.settings-weekday.is-closed .settings-weekday-hours {
+  display: none;
+}
+
+.settings-weekday.is-closed .settings-weekday-closed {
+  display: block;
+}
+
+.settings-deposit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-preview {
+  font-size: 0.8rem;
+  color: var(--gold-hover);
+  background: var(--gold-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.settings-preview:empty {
+  display: none;
 }
 
 .settings-actions {
@@ -1760,7 +1948,7 @@ textarea.form-control {
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
-  background: linear-gradient(135deg, #FBF6EC 0%, #F3EADB 100%);
+  background: linear-gradient(135deg, #FBF8F2 0%, #F3ECDF 100%);
   border: 1px solid var(--gold-border);
   border-radius: var(--radius-md);
   padding: 14px 18px;
@@ -1801,10 +1989,10 @@ textarea.form-control {
   max-width: 460px;
   margin: 0 auto;
   background: #FFFFFF;
-  color: #3C3226;
-  border: 1px solid #D5C3A3;
+  color: #37332F;
+  border: 1px solid #D6C39D;
   border-radius: 18px;
-  box-shadow: 0 18px 42px rgba(92, 71, 38, 0.25);
+  box-shadow: 0 18px 42px rgba(81, 70, 56, 0.25);
   padding: 16px 18px;
   font-size: 0.86rem;
   line-height: 1.45;
@@ -1828,7 +2016,7 @@ textarea.form-control {
   border: none;
   border-radius: 12px;
   padding: 12px;
-  background: #A8844A;
+  background: #B18B4A;
   color: #FFFFFF;
   font-family: inherit;
   font-weight: 600;
@@ -1848,7 +2036,7 @@ textarea.form-control {
 }
 
 .toast {
-  background: #3C3226;
+  background: #37332F;
   color: #FFFFFF;
   padding: 13px 20px;
   border-radius: 12px;
@@ -1870,6 +2058,26 @@ textarea.form-control {
 @media (max-width: 1120px) {
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+  .settings-weekday {
+    grid-template-columns: 1fr;
+  }
+  .settings-card {
+    padding: 18px 14px;
+  }
+  .settings-weekday {
+    padding: 8px;
+  }
+  .settings-weekday-hours {
+    gap: 6px;
+  }
+  .settings-weekday-hours .form-control {
+    font-size: 14px;
+    padding: 7px 4px;
+  }
+  .settings-weekday-hours .form-control::-webkit-calendar-picker-indicator {
+    margin-left: 0;
+    padding: 0;
   }
   .dashboard-grid,
   .patients-layout,
@@ -1922,7 +2130,7 @@ textarea.form-control {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(45, 35, 22, 0.4);
+    background: rgba(55, 51, 47, 0.4);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.28s ease;

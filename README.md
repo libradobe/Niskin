@@ -65,7 +65,17 @@ El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estát
 
 ## 4. Configuración del negocio
 
-En **Configuración** (solo administradoras) se definen: nombre, frase, ciudad, dirección, Instagram, mensaje de bienvenida de la página de clientas, **WhatsApp del estudio**, **datos para el depósito**, política de cancelación, días y horarios que se ofrecen, anticipación mínima, hasta cuántos días se puede reservar, máximo de citas activas por clienta y recordatorios.
+En **Configuración** (solo administradoras):
+
+- **Tu negocio:** nombre, frase, ciudad, dirección, Instagram y mensaje de bienvenida de la página de clientas.
+- **Moneda e idioma:** moneda de precios y cobros (RD$, US$, €, MX$, COL$, S/, CLP$, AR$, Q, ₡). Cambia el símbolo, no convierte montos guardados. Idioma (español o inglés) de la página de clientas, sus notificaciones y los mensajes de WhatsApp a clientas; el panel del equipo sigue en español.
+- **Cobro de la reservación:** activar o no el depósito; monto **por tratamiento**, **fijo** o **porcentaje del precio**; datos bancarios, WhatsApp del estudio y política de cancelación. Sin depósito, las reservas quedan confirmadas y se paga todo al finalizar.
+- **Horario laboral:** días que abre y hora de apertura/cierre de cada día, cada cuántos minutos se ofrece una hora y la anticipación mínima. Cada cita bloquea la duración de su tratamiento, así no se cruzan reservas de la misma especialista.
+- **Reservas en línea y recordatorios:** pausar reservas, hasta cuántos días antes se reserva, citas activas por clienta y recordatorios push.
+
+**Calendario:** en el Panel Principal, tocar un día abre la lista de citas de ese día (con WhatsApp, confirmar, cobrar y ver expediente) y el botón para agendar en esa fecha. Los días cerrados aparecen rayados.
+
+**Horarios ocupados:** en la página de clientas y en la vista previa del portal, las horas que ya tienen cita se muestran tachadas y no se pueden elegir. En "Nueva cita" del panel aparecen como "ocupado".
 
 ## 5. WhatsApp
 

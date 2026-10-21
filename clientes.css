@@ -3,7 +3,7 @@
    Reutiliza los tokens, botones, formularios y pills de styles.css
    ========================================================================== */
 .client-page {
-  background: radial-gradient(circle at 15% 0%, #FBF6EC 0%, var(--bg-canvas) 50%);
+  background: radial-gradient(circle at 15% 0%, #FBF8F2 0%, var(--bg-canvas) 50%);
   min-height: 100vh;
   min-height: 100dvh;
 }
@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-  background: rgba(250, 248, 244, 0.94);
+  background: rgba(251, 250, 247, 0.94);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border-light);
@@ -296,7 +296,7 @@
 .cp-treatment.selected {
   border-color: var(--gold-primary);
   background: #FFFDF9;
-  box-shadow: 0 6px 18px rgba(168, 132, 74, 0.14);
+  box-shadow: 0 6px 18px rgba(177, 139, 74, 0.14);
 }
 
 .cp-treatment-top {
@@ -401,7 +401,7 @@
   justify-content: center;
   font-weight: 700;
   font-size: 0.82rem;
-  color: #6B5027;
+  color: #5C4C35;
   flex-shrink: 0;
 }
 
@@ -456,7 +456,7 @@
   background: var(--gold-primary);
   border-color: var(--gold-primary);
   color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(168, 132, 74, 0.3);
+  box-shadow: 0 4px 12px rgba(177, 139, 74, 0.3);
 }
 
 .cp-date.selected small {
@@ -711,7 +711,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: linear-gradient(135deg, #FBF6EC 0%, #F3EADB 100%);
+  background: linear-gradient(135deg, #FBF8F2 0%, #F3ECDF 100%);
   border: 1px solid var(--gold-border);
   border-radius: 18px;
   padding: 14px 16px;
@@ -765,7 +765,7 @@
   -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid var(--border-light);
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  box-shadow: 0 -6px 20px rgba(110, 88, 53, 0.06);
+  box-shadow: 0 -6px 20px rgba(81, 70, 56, 0.06);
 }
 
 .cp-tabbar[hidden] {
@@ -806,7 +806,7 @@
   gap: 14px;
   padding: 24px;
   text-align: center;
-  background: rgba(245, 242, 235, 0.9);
+  background: rgba(247, 245, 240, 0.9);
   font-size: 0.9rem;
   color: var(--text-secondary);
   opacity: 0;
@@ -877,4 +877,10 @@
   .cp-slots-loading {
     animation: none;
   }
+}
+
+.cp-slots-legend {
+  margin-top: 8px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
 }
