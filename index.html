@@ -3,221 +3,189 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <!-- Forzar siempre el tema claro: el modo oscuro del sistema no altera los colores de la app -->
   <meta name="color-scheme" content="only light">
   <meta name="supported-color-schemes" content="light">
   <meta name="theme-color" content="#FBFAF7">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Niskin">
-  <link rel="manifest" href="manifest-panel.webmanifest">
+  <title>Niskin Beauty Studio — Cosmetología clínica y cuidado facial</title>
+  <meta name="description" content="Cosmetología clínica y tratamientos faciales personalizados. Reserva tu cita en línea en minutos y recibe la confirmación por WhatsApp.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Niskin Beauty Studio — Reserva tu cita">
+  <meta property="og:description" content="Tratamientos faciales personalizados y seguimiento de tu piel. Reserva en línea en minutos.">
+  <meta property="og:image" content="assets/icon-512.png">
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <title>Niskin Beauty Studio — Gestión Cosmetológica & Portal de Clientes</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261021d">
+  <link rel="stylesheet" href="styles.css?v=20261021e">
+  <link rel="stylesheet" href="landing.css?v=20261021e">
 </head>
-<body>
-  <div class="app-layout">
-    <!-- BARRA LATERAL (FIEL AL BOCETO 1 + LOGO NISKIN BEAUTY STUDIO) -->
-    <aside class="sidebar" id="appSidebar">
-      <div>
-        <div class="brand-box" onclick="switchView('dashboard')" title="Ir al Panel Principal">
-          <img src="assets/logo.svg" alt="Niskin Beauty Studio Logo" class="brand-logo">
+<body class="landing-page">
+  <a class="lp-skip" href="#contenido" data-i18n="skip">Saltar al contenido</a>
+
+  <header class="lp-header">
+    <a href="./" class="lp-brand" aria-label="Niskin Beauty Studio — inicio">
+      <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="lp-logo">
+    </a>
+    <nav class="lp-nav" aria-label="Secciones">
+      <a href="#tratamientos" data-i18n="navTreatments">Tratamientos</a>
+      <a href="#como-funciona" data-i18n="navHow">Cómo funciona</a>
+      <a href="#equipo" data-i18n="navTeam">Equipo</a>
+      <a href="#contacto" data-i18n="navContact">Contacto</a>
+    </nav>
+    <a class="btn-gold lp-header-cta" href="clientes.html?origen=landing-header" data-cta="header" data-i18n="ctaShort">Reservar cita</a>
+  </header>
+
+  <main id="contenido">
+    <!-- PROPUESTA DE VALOR -->
+    <section class="lp-hero">
+      <div class="lp-hero-text">
+        <p class="lp-eyebrow" id="lpEyebrow">La Romana, República Dominicana</p>
+        <h1 id="lpHeadline">Cosmetología clínica y cuidado facial personalizado</h1>
+        <p class="lp-lead" id="lpLead">Tratamientos faciales con evaluación profesional de tu piel, un plan hecho para ti y seguimiento de tu progreso en cada visita.</p>
+        <div class="lp-hero-ctas">
+          <a class="btn-gold lp-cta-primary" href="clientes.html?origen=landing-hero" data-cta="hero">
+            <span data-i18n="ctaBook">Reservar una cita</span> <span aria-hidden="true">→</span>
+          </a>
+          <a class="btn-soft lp-cta-secondary" href="#tratamientos" data-i18n="ctaSeeTreatments">Ver tratamientos</a>
         </div>
-
-        <ul class="nav-list">
-          <li>
-            <button class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-              </span>
-              <span>Panel Principal</span>
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" data-view="agenda" onclick="switchView('agenda')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-              </span>
-              <span>Agenda y Citas</span>
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" data-view="patients" onclick="switchView('patients')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20c1.5-4 12.5-4 14 0"/><circle cx="12" cy="12" r="10"/></svg>
-              </span>
-              <span>Expedientes</span>
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" data-view="inventory" onclick="switchView('inventory')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7V4h6v3"/></svg>
-              </span>
-              <span>Inventario</span>
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" data-view="treatments" onclick="switchView('treatments')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4V2h6v2"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-              </span>
-              <span>Protocolos y Servicios</span>
-            </button>
-          </li>
-          <li>
-            <button class="nav-item" data-view="finances" onclick="switchView('finances')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><circle cx="9" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="16" r="1"/><circle cx="12" cy="16" r="1"/><circle cx="15" cy="16" r="1"/></svg>
-              </span>
-              <span>Finanzas y Caja</span>
-            </button>
-          </li>
-
-          <li>
-            <button class="nav-item" data-view="settings" onclick="switchView('settings')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-              </span>
-              <span>Configuración</span>
-            </button>
-          </li>
-          <li class="manager-only" hidden>
-            <button class="nav-item" data-view="team" onclick="switchView('team')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.6 4-5.5 6.5-5.5s5.5 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5c2.6 0 4.6 1.6 5.5 4.5"/></svg>
-              </span>
-              <span>Equipo y Accesos</span>
-            </button>
-          </li>
-
-          <div class="nav-divider"></div>
-
-          <li>
-            <button class="nav-item portal-highlight" data-view="client-portal" onclick="switchView('client-portal')">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-              </span>
-              <span>Vista previa del Portal</span>
-            </button>
-          </li>
-          <li>
-            <a class="nav-item" href="clientes.html" target="_blank" rel="noopener">
-              <span class="nav-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
-              </span>
-              <span>Página de Clientas</span>
-            </a>
-          </li>
+        <ul class="lp-trust" aria-label="Por qué elegirnos">
+          <li data-i18n="trust1">Reserva en línea en minutos</li>
+          <li data-i18n="trust2">Confirmación por WhatsApp</li>
+          <li data-i18n="trust3">Expediente y seguimiento de tu piel</li>
+          <li data-i18n="trust4">Tus datos son privados</li>
         </ul>
       </div>
 
-      <div class="sidebar-profile">
-        <button class="avatar-circle profile-avatar" id="sidebarAvatar" onclick="openMyAccountModal()" title="Mi cuenta">NB</button>
-        <div class="profile-meta" onclick="openMyAccountModal()" title="Mi cuenta">
-          <h4 id="sidebarStaffName">Equipo Niskin</h4>
-          <p id="sidebarStaffRole">Panel del estudio</p>
+      <aside class="lp-hero-card" aria-label="Horario de hoy">
+        <img src="assets/icon-192.png" alt="" class="lp-hero-mark" width="64" height="64">
+        <p class="lp-hero-card-label" data-i18n="todayLabel">Hoy</p>
+        <p class="lp-hero-card-status" id="lpTodayStatus">Consulta nuestro horario abajo</p>
+        <p class="lp-hero-card-hours" id="lpTodayHours"></p>
+        <div class="lp-hero-card-steps">
+          <span><b>1</b> <span data-i18n="miniStep1">Elige tu tratamiento</span></span>
+          <span><b>2</b> <span data-i18n="miniStep2">Escoge día y hora</span></span>
+          <span><b>3</b> <span data-i18n="miniStep3">Confirma tu reserva</span></span>
         </div>
-        <button class="round-action-btn logout-btn" onclick="adminLogout()" title="Cerrar sesión" aria-label="Cerrar sesión">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </button>
-      </div>
-    </aside>
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu(false)"></div>
+        <a class="btn-gold btn-block" href="clientes.html?origen=landing-card" data-cta="card" data-i18n="ctaBook">Reservar una cita</a>
+      </aside>
+    </section>
 
-    <!-- CONTENEDOR PRINCIPAL -->
-    <div class="main-wrapper">
-      <header class="topbar">
-        <div class="topbar-left">
-          <button class="menu-toggle-btn" id="menuToggleBtn" onclick="toggleMobileMenu()" aria-label="Abrir menú" aria-controls="appSidebar" aria-expanded="false">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
-          </button>
-          <div class="topbar-title">
-            <h1 id="topbarHeading">Panel General Niskin</h1>
-            <p id="topbarSubheading">Resumen ejecutivo de citas, ingresos, inventario y evolución de pacientes</p>
-          </div>
+    <!-- TRATAMIENTOS DESTACADOS -->
+    <section class="lp-section" id="tratamientos" aria-labelledby="lpTreatmentsTitle">
+      <div class="lp-section-head">
+        <p class="lp-eyebrow" data-i18n="treatmentsEyebrow">Tratamientos</p>
+        <h2 id="lpTreatmentsTitle" data-i18n="treatmentsTitle">Protocolos para cada necesidad de tu piel</h2>
+        <p data-i18n="treatmentsText">Cada sesión empieza con una evaluación y se adapta a lo que tu piel necesita ese día.</p>
+      </div>
+      <div class="lp-treatments" id="lpTreatments" aria-live="polite">
+        <div class="lp-treatment lp-skeleton"></div>
+        <div class="lp-treatment lp-skeleton"></div>
+        <div class="lp-treatment lp-skeleton"></div>
+      </div>
+      <p class="lp-payment-note" id="lpPaymentNote"></p>
+    </section>
+
+    <!-- CÓMO FUNCIONA -->
+    <section class="lp-section lp-how" id="como-funciona" aria-labelledby="lpHowTitle">
+      <div class="lp-section-head">
+        <p class="lp-eyebrow" data-i18n="howEyebrow">Cómo funciona</p>
+        <h2 id="lpHowTitle" data-i18n="howTitle">Reserva en tres pasos</h2>
+      </div>
+      <ol class="lp-steps">
+        <li>
+          <span class="lp-step-num">1</span>
+          <h3 data-i18n="step1Title">Crea tu cuenta</h3>
+          <p data-i18n="step1Text">Solo tu nombre, teléfono y correo. Así guardamos tus citas y tu expediente.</p>
+        </li>
+        <li>
+          <span class="lp-step-num">2</span>
+          <h3 data-i18n="step2Title">Elige tratamiento, día y hora</h3>
+          <p data-i18n="step2Text">Ves los horarios libres en tiempo real; los ocupados aparecen tachados.</p>
+        </li>
+        <li>
+          <span class="lp-step-num">3</span>
+          <h3 data-i18n="step3Title">Recibe la confirmación</h3>
+          <p data-i18n="step3Text">Te confirmamos por WhatsApp y, si lo activas, te enviamos un recordatorio antes de tu cita.</p>
+        </li>
+      </ol>
+      <div class="lp-center">
+        <a class="btn-gold lp-cta-primary" href="clientes.html?origen=landing-pasos" data-cta="steps">
+          <span data-i18n="ctaBook">Reservar una cita</span> <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- CONFIANZA: EQUIPO Y COMPROMISOS -->
+    <section class="lp-section" id="equipo" aria-labelledby="lpTeamTitle">
+      <div class="lp-section-head">
+        <p class="lp-eyebrow" data-i18n="teamEyebrow">Nuestro equipo</p>
+        <h2 id="lpTeamTitle" data-i18n="teamTitle">Especialistas en el cuidado de tu piel</h2>
+      </div>
+      <div class="lp-team" id="lpTeam"></div>
+
+      <div class="lp-promises">
+        <div>
+          <h3 data-i18n="promise1Title">Evaluación antes de cada tratamiento</h3>
+          <p data-i18n="promise1Text">Revisamos tu piel, alergias y objetivos para recomendarte el protocolo adecuado.</p>
         </div>
-
-        <div class="topbar-right">
-          <div class="mode-switch">
-            <button id="modeAdminBtn" class="mode-btn active" onclick="switchView('dashboard')">
-              💻 Estudio Admin
-            </button>
-            <button id="modeClientBtn" class="mode-btn" onclick="switchView('client-portal')">
-              📱 App Cliente
-            </button>
-          </div>
-
-          <button class="btn-soft btn-sm manager-only" hidden onclick="openRenderConfigModal()" title="Configurar URL del Servidor Render + MongoDB">
-            ☁️ <span class="btn-label">Render API</span>
-          </button>
-
-          <div class="search-pill">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="globalSearchInput" placeholder="Buscar clienta, cita o insumo...">
-          </div>
-
-          <button class="icon-circle-btn" onclick="switchView('inventory')" title="Alertas de stock y citas">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            <span class="notif-dot"></span>
-          </button>
-
-          <div class="avatar-circle topbar-avatar" id="topbarAvatar" style="width:38px;height:38px;cursor:pointer;" onclick="openMyAccountModal()" title="Mi cuenta">
-            NB
-          </div>
+        <div>
+          <h3 data-i18n="promise2Title">Seguimiento de tu progreso</h3>
+          <p data-i18n="promise2Text">Registramos cada sesión y la evolución de tu piel. Puedes verla desde tu cuenta.</p>
         </div>
-      </header>
-
-      <main id="workspaceContent" class="content-area"></main>
-    </div>
-  </div>
-
-  <!-- ACCESO AL PANEL (los datos del estudio solo se cargan con contraseña) -->
-  <div id="adminGate" class="admin-gate" role="dialog" aria-modal="true" aria-labelledby="adminGateTitle">
-    <form class="admin-gate-card" onsubmit="submitAdminLogin(event)">
-      <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="admin-gate-logo">
-      <h1 id="adminGateTitle">Panel del Estudio</h1>
-      <p class="admin-gate-sub">Acceso exclusivo para el equipo de Niskin Beauty Studio.</p>
-      <div class="form-group">
-        <label for="adminEmailInput">Correo</label>
-        <input type="email" id="adminEmailInput" class="form-control" autocomplete="username" inputmode="email" placeholder="tucorreo@ejemplo.com">
+        <div>
+          <h3 data-i18n="promise3Title">Pagos claros</h3>
+          <p id="lpPaymentPromise">Conoces el precio antes de reservar y te explicamos cómo y cuándo se paga.</p>
+        </div>
+        <div>
+          <h3 data-i18n="promise4Title">Privacidad</h3>
+          <p data-i18n="promise4Text">Tu información solo la ve el equipo del estudio. Nunca la compartimos.</p>
+        </div>
       </div>
-      <div class="form-group">
-        <label for="adminPasswordInput">Contraseña</label>
-        <input type="password" id="adminPasswordInput" class="form-control" autocomplete="current-password" required>
+      <p class="lp-policy" id="lpPolicy" hidden></p>
+    </section>
+
+    <!-- CONTACTO Y ÁREA DE SERVICIO -->
+    <section class="lp-section lp-contact" id="contacto" aria-labelledby="lpContactTitle">
+      <div class="lp-contact-info">
+        <p class="lp-eyebrow" data-i18n="contactEyebrow">Visítanos</p>
+        <h2 id="lpContactTitle" data-i18n="contactTitle">Dónde estamos</h2>
+        <p class="lp-address" id="lpAddress">La Romana, República Dominicana</p>
+        <div class="lp-contact-actions">
+          <a class="btn-soft lp-wa" id="lpWhatsapp" href="#" target="_blank" rel="noopener" hidden data-i18n="whatsapp">Escríbenos por WhatsApp</a>
+          <a class="btn-soft" id="lpMaps" href="#" target="_blank" rel="noopener" hidden data-i18n="maps">Cómo llegar</a>
+          <a class="btn-soft" id="lpInstagram" href="#" target="_blank" rel="noopener" hidden>Instagram</a>
+        </div>
       </div>
-      <p class="admin-gate-hint">¿Usas la contraseña maestra del estudio? Deja el correo vacío.</p>
-      <p id="adminGateMessage" class="form-message" role="alert" hidden></p>
-      <button type="submit" id="adminLoginBtn" class="btn-gold btn-block">Entrar al panel</button>
-      <a class="admin-gate-link" href="clientes.html">¿Eres clienta? Agenda tu cita aquí →</a>
-      <button type="button" id="adminGateConfigBtn" class="admin-gate-config" onclick="openRenderConfigModal()" hidden>Configurar servidor</button>
-    </form>
-  </div>
-
-  <!-- MODAL REUTILIZABLE -->
-  <div id="modalBackdrop" class="modal-backdrop">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 id="modalTitle">Modal</h3>
-        <button class="round-action-btn" onclick="closeModal()">✕</button>
+      <div class="lp-hours">
+        <h3 data-i18n="hoursTitle">Horario</h3>
+        <ul id="lpHours"><li data-i18n="hoursLoading">Cargando horario…</li></ul>
       </div>
-      <div id="modalBody" class="modal-body"></div>
-      <div id="modalFooter" class="modal-footer"></div>
-    </div>
-  </div>
+    </section>
 
-  <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
-  <div id="toastContainer" class="toast-container"></div>
+    <!-- LLAMADA FINAL -->
+    <section class="lp-final">
+      <h2 data-i18n="finalTitle">¿Lista para empezar a cuidar tu piel?</h2>
+      <p data-i18n="finalText">Elige tu tratamiento y el horario que mejor te quede. Toma menos de dos minutos.</p>
+      <a class="btn-gold lp-cta-primary" href="clientes.html?origen=landing-final" data-cta="final">
+        <span data-i18n="ctaBook">Reservar una cita</span> <span aria-hidden="true">→</span>
+      </a>
+    </section>
+  </main>
 
-  <script src="theme-guard.js?v=20261021d"></script>
-  <script src="config.js?v=20261021d"></script>
-  <script src="notificaciones.js?v=20261021d"></script>
-  <script src="data.js?v=20261021d"></script>
-  <script src="app.js?v=20261021d"></script>
+  <footer class="lp-footer">
+    <p><strong id="lpFooterName">Niskin Beauty Studio</strong> · <span id="lpYear"></span></p>
+    <nav aria-label="Enlaces">
+      <a href="clientes.html?modo=entrar&amp;origen=landing-footer" data-i18n="myAppointments">Mis citas</a>
+      <a href="panel.html" class="lp-staff-link" data-i18n="staffAccess">Acceso del equipo</a>
+    </nav>
+  </footer>
+
+  <!-- Botón fijo de reserva en móvil -->
+  <a class="lp-sticky-cta btn-gold" href="clientes.html?origen=landing-sticky" data-cta="sticky" data-i18n="ctaBook">Reservar una cita</a>
+
+  <script src="theme-guard.js?v=20261021e"></script>
+  <script src="config.js?v=20261021e"></script>
+  <script src="landing.js?v=20261021e"></script>
 </body>
 </html>

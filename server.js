@@ -59,7 +59,7 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Servir solo los archivos públicos del frontend (nunca server.js, modelos ni configuración)
 const PUBLIC_FILES = [
-  'index.html', 'clientes.html', 'styles.css', 'clientes.css', 'app.js', 'clientes.js', 'data.js',
+  'index.html', 'panel.html', 'clientes.html', 'styles.css', 'clientes.css', 'landing.css', 'app.js', 'clientes.js', 'landing.js', 'data.js',
   'config.js', 'theme-guard.js', 'notificaciones.js', 'sw.js', 'manifest-panel.webmanifest', 'manifest-clientes.webmanifest'
 ];
 PUBLIC_FILES.forEach(file => {
@@ -741,7 +741,7 @@ async function notifyStateChanges(prevAppointments, appointments, prevInventory,
       title: 'Stock bajo en inventario',
       body: newlyLow.map(i => `${i.name}: quedan ${i.stock} ${i.unit || ''}`.trim()).join(' • '),
       tag: 'stock-bajo',
-      url: './?vista=inventario'
+      url: './panel.html?vista=inventario'
     });
   }
 }
@@ -824,6 +824,32 @@ app.delete('/api/admin/treatments/:id', requireAdmin, requireMongo, async (req, 
 app.get('/api/public/settings', requireMongo, async (req, res) => {
   const st = await getSettings();
   res.json({ status: 'ok', settings: toPublicSettings(st) });
+});
+
+// Catálogo público para la página de inicio: negocio, horario, tratamientos y equipo.
+// No incluye ningún dato de clientas ni de citas.
+app.get('/api/public/catalog', requireMongo, async (req, res) => {
+  try {
+    const [st, treatments, specialists] = await Promise.all([
+      getSettings(),
+      Treatment.find({}).select(PUBLIC_TREATMENT_FIELDS).lean(),
+      Specialist.find({}).select(PUBLIC_SPECIALIST_FIELDS).lean()
+    ]);
+    res.set('Cache-Control', 'no-cache');
+    res.json({
+      status: 'ok',
+      settings: {
+        ...toPublicSettings(st),
+        weeklySchedule: st.weeklySchedule || [],
+        maxDaysAhead: st.maxDaysAhead
+      },
+      treatments: treatments.map(t => ({ ...t, deposit: sched.depositFor(t, st) })),
+      specialists
+    });
+  } catch (error) {
+    console.error('Error cargando catálogo público:', error);
+    res.status(500).json({ status: 'error', message: 'No se pudo cargar la información del estudio.' });
+  }
 });
 
 app.get('/api/admin/settings', requireAdmin, requireMongo, async (req, res) => {
@@ -1028,7 +1054,7 @@ app.post('/api/client/register', authLimiter, requireMongo, async (req, res) => 
       title: 'Nueva clienta registrada',
       body: `${patient.name} creó su cuenta desde la página de reservas.`,
       tag: `registro-${patient.id}`,
-      url: './?vista=expedientes'
+      url: './panel.html?vista=expedientes'
     });
   } catch (error) {
     console.error('Error registrando clienta:', error);
@@ -1138,6 +1164,7 @@ app.get('/api/client/availability', requireRole('client'), requireMongo, async (
 
 app.post('/api/client/appointments', requireRole('client'), requireMongo, async (req, res) => {
   const { treatmentId, specialistId, date, time } = req.body || {};
+  const bookingOrigin = cleanText((req.body || {}).origin, 40).replace(/[^\w-]/g, '');
   const L = await clientLang();
 
   if (!isValidDateString(date)) {
@@ -1211,7 +1238,8 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       price: treatment.price,
       depositPaid: 0,
       paymentMode: needsDeposit ? 'deposito' : 'al-finalizar',
-      status: needsDeposit ? 'Pendiente Depósito' : 'Confirmada'
+      status: needsDeposit ? 'Pendiente Depósito' : 'Confirmada',
+      bookingOrigin: bookingOrigin || 'directo'
     });
 
     res.status(201).json({
@@ -1224,7 +1252,7 @@ app.post('/api/client/appointments', requireRole('client'), requireMongo, async 
       title: needsDeposit ? 'Nueva cita reservada 📅' : 'Nueva cita confirmada 📅',
       body: `${patient.name} • ${treatment.name} • ${formatDateEs(date)} a las ${time} con ${specialist.name}. ${needsDeposit ? 'Pendiente de depósito.' : 'Paga al finalizar.'}`,
       tag: `cita-${appointment.id}`,
-      url: './?vista=agenda'
+      url: './panel.html?vista=agenda'
     }, { specialistId: specialist.id });
   } catch (error) {
     console.error('Error creando cita de clienta:', error);
@@ -1250,7 +1278,7 @@ app.post('/api/client/appointments/:id/cancel', requireRole('client'), requireMo
       title: 'Cita cancelada por la clienta',
       body: `${appointment.patientName} canceló ${appointment.treatmentName} del ${formatDateEs(appointment.date)} a las ${appointment.time}.`,
       tag: `cita-${appointment.id}`,
-      url: './?vista=agenda'
+      url: './panel.html?vista=agenda'
     }, { specialistId: appointment.specialistId });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: clientMessage(L, 'cancelFailed') });
@@ -1263,8 +1291,11 @@ app.use('/api', (req, res) => {
 });
 
 // Página de clientas y fallback del panel
-app.get(['/clientes', '/registro'], (req, res) => {
+app.get(['/clientes', '/registro', '/citas', '/reservar'], (req, res) => {
   res.sendFile(path.join(__dirname, 'clientes.html'));
+});
+app.get(['/panel', '/equipo'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'panel.html'));
 });
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));

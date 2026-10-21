@@ -1,7 +1,7 @@
 {
   "name": "Niskin — Panel del Estudio",
   "short_name": "Niskin Panel",
-  "start_url": "./index.html",
+  "start_url": "./panel.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#F7F5F0",

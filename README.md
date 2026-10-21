@@ -2,12 +2,13 @@
 
 Arquitectura desacoplada donde la interfaz web (**Frontend**) se aloja en el `public_html` de tu dominio en **Hostinger** y se comunica vía API REST (`CORS`) con tu servidor **Node.js + Express** en **Render** conectado a **MongoDB Atlas**.
 
-La app tiene dos partes:
+La app tiene tres partes:
 
 | Página | Para quién | Acceso |
 | --- | --- | --- |
-| `index.html` (Panel del Estudio) | Equipo de Niskin | Cuenta propia (correo + contraseña) o contraseña maestra (`ADMIN_PASSWORD`) |
-| `clientes.html` (Agenda tu cita) | Clientas | Cada clienta crea su cuenta con correo y contraseña |
+| `index.html` (inicio público, `/`) | Visitantes | Libre. Propuesta de valor, tratamientos, cómo funciona, equipo, horario, contacto y botón **Reservar una cita** |
+| `clientes.html` (Agenda tu cita, `/reservar`) | Clientas | Cada clienta crea su cuenta con correo y contraseña |
+| `panel.html` (Panel del Estudio, `/panel`) | Equipo de Niskin | Cuenta propia (correo + contraseña) o contraseña maestra (`ADMIN_PASSWORD`). Enlace "Acceso del equipo" en el pie del inicio |
 
 **Privacidad:** la API ya no entrega datos sin sesión. El panel necesita la contraseña de administradora, y cada clienta solo recibe su propio perfil, sus citas y el catálogo de tratamientos. Las contraseñas de las clientas se guardan cifradas (scrypt) en una colección separada que nunca se envía al panel.
 
@@ -31,7 +32,7 @@ El repositorio contiene el servidor (`server.js`, `auth.js`), los modelos de Mon
 
 ## 2. Subir el Frontend a Hostinger (`public_html`)
 
-El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estáticos: `index.html`, `clientes.html`, estilos, scripts (`app.js`, `clientes.js`, `notificaciones.js`, `theme-guard.js`, `config.js`, `data.js`), el service worker `sw.js`, los manifiestos `.webmanifest`, la carpeta `assets/` (logo e íconos) y `.htaccess`.
+El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estáticos: `index.html` (inicio), `panel.html`, `clientes.html`, estilos (`styles.css`, `clientes.css`, `landing.css`), scripts (`app.js`, `clientes.js`, `landing.js`, `notificaciones.js`, `theme-guard.js`, `config.js`, `data.js`), el service worker `sw.js`, los manifiestos `.webmanifest`, la carpeta `assets/` (logo e íconos) y `.htaccess`.
 
 > `.htaccess` es un archivo oculto. En el Administrador de archivos activa "Mostrar archivos ocultos" y confirma que se reemplazó; si no, la URL corta `/clientes` y el control de caché no funcionan.
 
@@ -42,7 +43,7 @@ El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estát
    window.NISKIN_RENDER_URL = 'https://tu-servicio.onrender.com';
    ```
    o desde **Configurar servidor** en la pantalla de acceso del panel.
-4. Si cambias archivos CSS/JS, sube el número `?v=...` en `index.html` y `clientes.html` para que los teléfonos descarguen la versión nueva.
+4. Si cambias archivos CSS/JS, sube el número `?v=...` en `index.html`, `panel.html` y `clientes.html` para que los teléfonos descarguen la versión nueva.
 
 ## 3. Cuentas del equipo (administradoras y cosmetólogas)
 
@@ -105,8 +106,11 @@ Chrome y Safari respetan el tema claro de la app. Samsung Internet, en cambio, o
 
 ## 8. Enlaces para compartir
 
-- **Clientas:** `https://TU-DOMINIO/clientes` (también `/registro` o `/citas`). Ahí se registran, agendan, ven y cancelan sus citas.
-- **Equipo:** `https://TU-DOMINIO/` → pide la contraseña del panel.
+- **Sitio (para redes y Google):** `https://TU-DOMINIO/` → página de inicio con el botón **Reservar una cita**.
+- **Reservar directo:** `https://TU-DOMINIO/reservar` (también `/clientes`, `/registro`, `/citas`).
+- **Equipo:** `https://TU-DOMINIO/panel` (o el enlace "Acceso del equipo" al pie del inicio). Guarda este enlace en tus favoritos.
+
+**Medición:** cada botón de reservar del inicio envía un origen (`landing-hero`, `landing-tratamiento`, `landing-sticky`, etc.). Las reservas en línea guardan ese origen en el campo `bookingOrigin` de la cita (`directo` si la clienta llegó sin pasar por el inicio), para comparar más adelante qué botón trae más citas.
 
 **Pagos de las citas**
 

@@ -85,6 +85,8 @@ const AppointmentSchema = new mongoose.Schema({
   // 'deposito': se reservó con depósito • 'al-finalizar': sin depósito, paga todo al terminar
   paymentMode: { type: String, default: 'deposito' },
   finalPaid: { type: Number, default: 0 },
+  // De dónde vino la reserva en línea (ej. 'landing-hero'), para medir conversiones
+  bookingOrigin: { type: String, default: '' },
   reminderSentAt: { type: Date }
 }, { timestamps: true });
 

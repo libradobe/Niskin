@@ -89,7 +89,7 @@ async function notifyStaff(payload, { specialistId } = {}) {
       ? { active: true, $or: [{ role: 'administradora' }, { specialistId }] }
       : { active: true, role: 'administradora' };
     const staff = await StaffAccount.find(filter).select('id').lean();
-    await sendToOwners('staff', ['owner', ...staff.map(s => s.id)], { url: './', ...payload });
+    await sendToOwners('staff', ['owner', ...staff.map(s => s.id)], { url: './panel.html', ...payload });
   } catch (err) {
     console.warn('Error notificando al equipo:', err.message);
   }

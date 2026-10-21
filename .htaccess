@@ -12,14 +12,17 @@ Options -Indexes
   RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
   # URL corta para la página de registro y citas de clientas
-  RewriteRule ^(clientes|registro|citas)$ clientes.html [L]
+  RewriteRule ^(clientes|registro|citas|reservar)$ clientes.html [L]
+
+  # Panel del equipo (la raíz es la página pública del estudio)
+  RewriteRule ^(panel|equipo)$ panel.html [L]
 </IfModule>
 
 # Manifiestos de la app instalable (notificaciones en iPhone requieren instalarla)
 AddType application/manifest+json .webmanifest
 
 # Evitar que el navegador o la CDN de Hostinger muestren versiones viejas de la app.
-# El HTML siempre se revalida; CSS/JS llevan ?v=... en index.html y clientes.html.
+# El HTML siempre se revalida; CSS/JS llevan ?v=... en index.html, panel.html y clientes.html.
 <IfModule mod_headers.c>
   <FilesMatch "\.(html|htm)$">
     Header set Cache-Control "no-cache, must-revalidate"

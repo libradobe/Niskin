@@ -36,6 +36,9 @@ function storageSet(key, value) {
 function storageRemove(key) {
   try { localStorage.removeItem(key); } catch (e) {}
 }
+function storageSessionGet(key) {
+  try { return sessionStorage.getItem(key); } catch (e) { return null; }
+}
 
 
 // ---------------------------------------------------------------------------
@@ -463,6 +466,13 @@ async function loadClientData() {
     cp.data = await api('/api/client/me');
     const { profile, treatments, specialists } = cp.data;
 
+    // Tratamiento elegido en la página de inicio (se conserva aunque primero se cree la cuenta)
+    const wanted = storageSessionGet('niskin_wanted_treatment');
+    if (wanted && treatments.find(tr => tr.id === wanted)) {
+      cp.booking.treatmentId = wanted;
+      cp.tab = 'book';
+      try { sessionStorage.removeItem('niskin_wanted_treatment'); } catch (e) {}
+    }
     if (!treatments.find(tr => tr.id === cp.booking.treatmentId)) cp.booking.treatmentId = treatments[0]?.id || '';
     if (!specialists.find(s => s.id === cp.booking.specialistId)) cp.booking.specialistId = specialists[0]?.id || '';
     if (!cp.booking.date) {
@@ -747,7 +757,7 @@ async function submitBooking() {
   try {
     const result = await api('/api/client/appointments', {
       method: 'POST',
-      body: { treatmentId, specialistId, date, time }
+      body: { treatmentId, specialistId, date, time, origin: storageSessionGet('niskin_origin') || '' }
     });
     cp.data.appointments.unshift(result.appointment);
     cp.booking.time = '';
@@ -993,6 +1003,12 @@ function renderSkinTab() {
 // Inicio
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search);
+  try {
+    if (params.get('tratamiento')) sessionStorage.setItem('niskin_wanted_treatment', params.get('tratamiento'));
+    // Origen de la visita (página de inicio, etc.) para medir conversiones en el futuro
+    if (params.get('origen') && !sessionStorage.getItem('niskin_origin')) sessionStorage.setItem('niskin_origin', params.get('origen'));
+  } catch (e) {}
   // Cargar idioma y datos del negocio antes de mostrar textos (máximo 3 s si el servidor está despertando)
   applyStaticTranslations();
   await Promise.race([loadPublicStudio(), new Promise(resolve => setTimeout(resolve, 3000))]);
