@@ -61,11 +61,12 @@ El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estát
 | Usar agenda, expedientes, inventario, finanzas | ✅ | ✅ |
 | Eliminar citas | ✅ | ✅ |
 | Eliminar clientas y tratamientos | ✅ | — |
-| Configuración del negocio, Equipo, conexión del servidor | ✅ | — |
+| Configuración del negocio | ✅ | ✅ |
+| Equipo y Accesos, conexión del servidor | ✅ | — |
 
 ## 4. Configuración del negocio
 
-En **Configuración** (solo administradoras):
+En **Configuración** (administradoras y cosmetólogas):
 
 - **Tu negocio:** nombre, frase, ciudad, dirección, Instagram y mensaje de bienvenida de la página de clientas.
 - **Moneda e idioma:** moneda de precios y cobros (RD$, US$, €, MX$, COL$, S/, CLP$, AR$, Q, ₡). Cambia el símbolo, no convierte montos guardados. Idioma (español o inglés) de la página de clientas, sus notificaciones y los mensajes de WhatsApp a clientas; el panel del equipo sigue en español.

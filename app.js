@@ -326,7 +326,7 @@ function applyStaffToUI() {
   document.querySelectorAll('.manager-only').forEach(el => {
     el.hidden = !isStaffManager();
   });
-  if ((uiState.currentView === 'team' || uiState.currentView === 'settings') && !isStaffManager()) switchView('dashboard');
+  if (uiState.currentView === 'team' && !isStaffManager()) switchView('dashboard');
 }
 
 async function refreshCurrentStaff() {
@@ -720,6 +720,14 @@ function studioSettings() {
   return uiState.settings || {};
 }
 
+function formatDateShort(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const sameYear = y === new Date().getFullYear();
+  return date.toLocaleDateString('es-DO', { weekday: 'short', day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) }).replace(/\./g, '');
+}
+
 function formatDateLong(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
@@ -912,7 +920,7 @@ async function performDelete() {
 }
 
 // ============================================================================
-// CONFIGURACIÓN DEL NEGOCIO (solo administradoras)
+// CONFIGURACIÓN DEL NEGOCIO (administradoras y cosmetólogas)
 // ============================================================================
 const WEEKDAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -941,9 +949,6 @@ function slotMinutes(slot) {
 }
 
 function renderSettingsView() {
-  if (!isStaffManager()) {
-    return `<div class="surface-card" style="padding:28px;">Solo una administradora puede cambiar la configuración del negocio.</div>`;
-  }
   if (!uiState.settings) {
     if (!uiState.settingsLoading) {
       uiState.settingsLoading = true;
@@ -1481,7 +1486,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 function switchView(viewName) {
-  if ((viewName === 'team' || viewName === 'settings') && !isStaffManager()) viewName = 'dashboard';
+  if (viewName === 'team' && !isStaffManager()) viewName = 'dashboard';
   const viewChanged = uiState.currentView !== viewName;
   uiState.currentView = viewName;
   toggleMobileMenu(false);
@@ -1741,7 +1746,7 @@ function renderAppointmentRow(app) {
       </div>
       <div class="entity-text">
         <h4>${app.time}</h4>
-        <p>${app.date}</p>
+        <p class="nowrap">${escapeHTML(formatDateShort(app.date))}</p>
       </div>
       <div>
         <span class="status-pill ${badgeClass}">

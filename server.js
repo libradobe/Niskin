@@ -824,7 +824,8 @@ app.get('/api/admin/settings', requireAdmin, requireMongo, async (req, res) => {
   res.json({ status: 'ok', settings: toAdminSettings(st) });
 });
 
-app.put('/api/admin/settings', requireAdmin, requireStaffManager, requireMongo, async (req, res) => {
+// Administradoras y cosmetólogas pueden configurar el negocio
+app.put('/api/admin/settings', requireAdmin, requireMongo, async (req, res) => {
   const body = req.body || {};
   const current = await getSettings();
   const update = {};
