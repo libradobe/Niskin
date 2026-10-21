@@ -1448,25 +1448,6 @@ function getInitials(name) {
 
 const PASTEL_CLASSES = ['pastel-rose', 'pastel-sage', 'pastel-lavender', 'pastel-amber', 'pastel-blue'];
 
-// Las clientas registradas en la web aún no tienen fotos: se muestra una ilustración neutra
-// (solo en pantalla, no se guarda en el expediente)
-const photoPlaceholderCache = {};
-function patientPhoto(patient, mode) {
-  const stored = mode === 'before' ? patient.beforePhoto : patient.afterPhoto;
-  if (stored) return stored;
-  const key = `${patient.id}-${mode}`;
-  if (!photoPlaceholderCache[key]) {
-    photoPlaceholderCache[key] = createSkinVisualSVG({
-      mode,
-      clientName: patient.name,
-      sessionLabel: mode === 'before' ? 'Sin foto inicial' : 'Sin foto de progreso',
-      dateLabel: '',
-      conditionType: 'hydration'
-    });
-  }
-  return photoPlaceholderCache[key];
-}
-
 function formatAge(age) {
   return age ? `${age} años` : 'edad por registrar';
 }
@@ -1502,7 +1483,7 @@ function switchView(viewName) {
   const titles = {
     'dashboard': ['Panel General Niskin', 'Resumen ejecutivo de citas, ingresos, inventario y evolución de pacientes'],
     'agenda': ['Agenda y Citas', 'Control de reservas, confirmación de depósitos y atención en cabina'],
-    'patients': ['Expedientes Clínicos y Fotos de Mejoría', 'Ficha cosmetológica, historial de tratamientos, rutina AM/PM y comparador Antes/Después'],
+    'patients': ['Expedientes Clínicos', 'Ficha cosmetológica, seguimiento del progreso, plan de tratamiento, rutina y sesiones'],
     'inventory': ['Inventario de Cabina y Skincare Retail', 'Control de existencias, alertas de stock mínimo y descuento automático por sesión'],
     'treatments': ['Catálogo de Tratamientos y Protocolos', 'Servicios de Niskin Beauty Studio e insumos vinculados por sesión'],
     'finances': ['Finanzas y Flujo de Caja', 'Registro de ingresos por tratamientos, depósitos, ventas de skincare y gastos operativos'],
@@ -1532,7 +1513,6 @@ function renderWorkspace() {
       break;
     case 'patients':
       container.innerHTML = renderPatientsView();
-      initBeforeAfterSliders();
       break;
     case 'inventory':
       container.innerHTML = renderInventoryView();
@@ -1552,7 +1532,6 @@ function renderWorkspace() {
       break;
     case 'client-portal':
       container.innerHTML = renderClientPortalView();
-      initBeforeAfterSliders();
       break;
     default:
       container.innerHTML = renderDashboardView();
@@ -1763,7 +1742,7 @@ function renderAppointmentRow(app) {
         </div>
       </div>
       <div class="row-actions">
-        <button class="round-action-btn" title="Ver Expediente y Fotos de Mejoría" onclick="openPatientRecord('${app.patientId}')">
+        <button class="round-action-btn" title="Ver expediente" onclick="openPatientRecord('${app.patientId}')">
           📋
         </button>
         <button class="round-action-btn whatsapp-btn" title="Enviar mensaje por WhatsApp" aria-label="WhatsApp" onclick="sendAppointmentWhatsApp('${app.id}')">
@@ -2143,7 +2122,7 @@ function completeAppointmentSession(appointmentId) {
       specialistName: app.specialistName,
       activesApplied: treatment ? treatment.description : 'Protocolo personalizado en cabina Niskin',
       notes: 'Sesión completada satisfactoriamente. Se actualizaron indicaciones de cuidado en casa.',
-      improvementScore: '94%'
+      improvementScore: ''
     });
   }
 
@@ -2168,19 +2147,157 @@ function selectPatient(patientId) {
   renderWorkspace();
 }
 
+// ============================================================================
+// EXPEDIENTES: SEGUIMIENTO DEL PROGRESO
+// ============================================================================
+const METRIC_DEFS = [
+  ['hydration', 'Hidratación y función barrera'],
+  ['toneUniformity', 'Uniformidad del tono'],
+  ['texturePores', 'Textura, firmeza y poros'],
+  ['blemishControl', 'Control de imperfecciones']
+];
+
+// Evaluaciones ordenadas por fecha. Si la paciente solo tiene el registro antiguo
+// (antes/actual), se muestra como dos evaluaciones hasta que se guarde una nueva.
+function progressLogOf(p) {
+  if (Array.isArray(p.progressLog) && p.progressLog.length) {
+    return [...p.progressLog].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  }
+  const m = p.metrics || {};
+  const hasLegacy = METRIC_DEFS.some(([k]) => m[k] && (Number(m[k].before) || Number(m[k].current)));
+  if (!hasLegacy) return [];
+  const dates = (p.sessions || []).map(s => s.date).filter(Boolean).sort();
+  const first = { id: 'legacy-1', date: dates[0] || '', specialistName: '', notes: 'Evaluación inicial registrada antes del seguimiento.', legacy: true };
+  const last = { id: 'legacy-2', date: dates[dates.length - 1] || TODAY_ISO, specialistName: '', notes: 'Último estado registrado antes del seguimiento.', legacy: true };
+  METRIC_DEFS.forEach(([k]) => {
+    first[k] = Number(m[k]?.before) || 0;
+    last[k] = Number(m[k]?.current) || 0;
+  });
+  return [first, last];
+}
+
+// Convierte el registro antiguo en evaluaciones reales antes de modificarlas
+function materializeProgressLog(p) {
+  if (Array.isArray(p.progressLog) && p.progressLog.length) return;
+  p.progressLog = progressLogOf(p).map(({ legacy, ...entry }, i) => ({ ...entry, id: `eval-${Date.now()}-${i}` }));
+}
+
+// Mantiene metrics (inicio → actual) al día: lo usan la página de clientas y la vista previa
+function syncMetricsFromLog(p) {
+  const log = progressLogOf(p);
+  p.metrics = p.metrics || {};
+  METRIC_DEFS.forEach(([k]) => {
+    p.metrics[k] = log.length
+      ? { before: Number(log[0][k]) || 0, current: Number(log[log.length - 1][k]) || 0 }
+      : { before: 0, current: 0 };
+  });
+}
+
+function sparkline(values) {
+  if (values.length < 2) return '';
+  const w = 120;
+  const h = 34;
+  const step = w / (values.length - 1);
+  const points = values.map((v, i) => `${(i * step).toFixed(1)},${(h - 3 - (Math.max(0, Math.min(100, v)) / 100) * (h - 6)).toFixed(1)}`);
+  const [lx, ly] = points[points.length - 1].split(',');
+  return `
+    <svg class="sparkline" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">
+      <polyline points="${points.join(' ')}" fill="none" stroke="var(--gold-primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${lx}" cy="${ly}" r="3" fill="var(--gold-primary)"/>
+    </svg>
+  `;
+}
+
+function renderProgressSection(p) {
+  const log = progressLogOf(p);
+  if (!log.length) {
+    return `
+      <div class="progress-empty">
+        <p>Aún no hay evaluaciones. Registra la primera para empezar a seguir la evolución de la piel de ${escapeHTML(nameWithoutTitles(p.name)[0])}.</p>
+        <button class="btn-gold btn-sm" onclick="openEvaluationModal('${escapeHTML(p.id)}')">＋ Primera evaluación</button>
+      </div>
+    `;
+  }
+  const first = log[0];
+  const last = log[log.length - 1];
+  return `
+    <div class="progress-metrics">
+      ${METRIC_DEFS.map(([k, label]) => {
+        const start = Number(first[k]) || 0;
+        const now = Number(last[k]) || 0;
+        const delta = now - start;
+        return `
+          <div class="progress-metric">
+            <div class="progress-metric-top">
+              <span>${escapeHTML(label)}</span>
+              ${log.length > 1 ? `<span class="progress-delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}">${delta > 0 ? '+' : ''}${delta}</span>` : ''}
+            </div>
+            <div class="progress-metric-values">
+              <strong>${now}%</strong>
+              ${log.length > 1 ? `<span>inicio ${start}%</span>` : ''}
+            </div>
+            <div class="kpi-progress-track"><div class="kpi-progress-bar" style="width:${Math.max(0, Math.min(100, now))}%"></div></div>
+            ${sparkline(log.map(e => Number(e[k]) || 0))}
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <h4 class="subsection-title">Historial de evaluaciones (${log.length})</h4>
+    <div class="eval-list">
+      ${[...log].reverse().map(e => `
+        <div class="eval-item">
+          <div class="eval-date">${escapeHTML(e.date ? formatDateShort(e.date) : 'Sin fecha')}</div>
+          <div class="eval-body">
+            <div class="eval-values">
+              ${METRIC_DEFS.map(([k, label]) => `<span title="${escapeHTML(label)}">${escapeHTML(label.split(' ')[0])}: <strong>${Number(e[k]) || 0}%</strong></span>`).join('')}
+            </div>
+            ${e.notes ? `<p>${escapeHTML(e.notes)}</p>` : ''}
+            ${e.specialistName ? `<p class="eval-by">Evaluó: ${escapeHTML(e.specialistName)}</p>` : ''}
+          </div>
+          <div class="eval-actions">
+            <button class="round-action-btn" title="Editar evaluación" onclick="openEvaluationModal('${escapeHTML(p.id)}', '${escapeHTML(e.id)}')">✎</button>
+            <button class="round-action-btn danger-btn" title="Eliminar evaluación" onclick="askDeleteEvaluation('${escapeHTML(p.id)}', '${escapeHTML(e.id)}')">✕</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function patientAppointments(patientId) {
+  return state.appointments
+    .filter(a => a.patientId === patientId)
+    .sort((a, b) => (a.date + String(slotMinutes(a.time)).padStart(4, '0')).localeCompare(b.date + String(slotMinutes(b.time)).padStart(4, '0')));
+}
+
 function renderPatientsView() {
-  const p = state.patients.find(item => item.id === uiState.selectedPatientId) || state.patients[0];
+  if (!state.patients.length) {
+    return `
+      <div class="action-bar">
+        <span style="font-size:0.86rem;color:var(--text-secondary);">Aún no hay expedientes.</span>
+        <button class="btn-gold" onclick="openNewPatientModal()"><span>＋</span> Nueva Paciente</button>
+      </div>
+    `;
+  }
+  const q = (uiState.searchQuery || '').toLowerCase();
+  const list = q ? state.patients.filter(pat => `${pat.name} ${pat.phone} ${pat.email}`.toLowerCase().includes(q)) : state.patients;
+  const p = state.patients.find(item => item.id === uiState.selectedPatientId) || list[0] || state.patients[0];
+  const appts = patientAppointments(p.id);
+  const todayIso = toISODate(new Date());
+  const upcoming = appts.filter(a => a.date >= todayIso && ACTIVE_APPOINTMENT_STATUSES.includes(a.status));
+  const sessionDates = (p.sessions || []).map(s => s.date).filter(Boolean).sort();
+  const nextAppt = upcoming[0];
+  const statusClass = st => (st === 'Cancelada' ? 'status-danger' : (st === 'Confirmada' || st === 'Completada') ? 'status-confirmed' : 'status-pending');
 
   return `
     <div class="action-bar">
-      <div>
-        <span style="font-size:0.86rem;color:var(--text-secondary);">
-          Selecciona una paciente para consultar su ficha dermatológica, subir fotos de mejoría o registrar una sesión en cabina.
-        </span>
-      </div>
+      <span style="font-size:0.86rem;color:var(--text-secondary);">
+        Ficha cosmetológica, seguimiento del progreso, plan de tratamiento y sesiones de cada paciente.
+      </span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-soft" onclick="previewClientPortalFor('${p.id}')">
-          <span>📱</span> Ver como ${p.name} en Portal Cliente
+        <button class="btn-soft" onclick="previewClientPortalFor('${escapeHTML(p.id)}')">
+          <span>📱</span> Ver como ${escapeHTML(nameWithoutTitles(p.name)[0])} en el portal
         </button>
         <button class="btn-gold" onclick="openNewPatientModal()">
           <span>＋</span> Nueva Paciente
@@ -2191,141 +2308,437 @@ function renderPatientsView() {
     <div class="patients-layout">
       <div class="surface-card">
         <div class="card-header">
-          <h2>Pacientes (${state.patients.length})</h2>
+          <h2>Pacientes (${list.length})</h2>
         </div>
         <div>
-          ${state.patients.map(pat => `
-            <div class="patient-Selector-item ${pat.id === p.id ? 'active' : ''}" onclick="selectPatient('${pat.id}')">
-              <div class="pastel-avatar ${pat.pastelClass}">${pat.initials}</div>
+          ${list.map(pat => `
+            <div class="patient-Selector-item ${pat.id === p.id ? 'active' : ''}" onclick="selectPatient('${escapeHTML(pat.id)}')">
+              <div class="pastel-avatar ${escapeHTML(pat.pastelClass)}">${escapeHTML(pat.initials)}</div>
               <div class="entity-text" style="flex:1;">
-                <h4>${pat.name}</h4>
-                <p>${pat.skinBiotype} • ${pat.sessions.length} ses.</p>
+                <h4>${escapeHTML(pat.name)}</h4>
+                <p>${escapeHTML(pat.skinBiotype)} • ${(pat.sessions || []).length} ses.</p>
               </div>
               <span style="color:var(--gold-primary);font-weight:700;">›</span>
             </div>
-          `).join('')}
+          `).join('') || '<p style="padding:18px;color:var(--text-secondary);font-size:0.86rem;">Sin resultados.</p>'}
         </div>
       </div>
 
       <div class="surface-card">
         <div class="clinical-detail-header">
-          <div style="display:flex;align-items:center;gap:16px;">
-            <div class="pastel-avatar ${p.pastelClass}" style="width:56px;height:56px;font-size:1.15rem;">${p.initials}</div>
-            <div>
-              <h2 style="font-family:var(--font-serif);font-size:1.65rem;">${p.name} (${formatAge(p.age)})</h2>
-              <p style="font-size:0.84rem;color:var(--text-secondary);">📞 ${p.phone} • ✉️ ${p.email}</p>
+          <div class="patient-head">
+            <div class="pastel-avatar ${escapeHTML(p.pastelClass)}" style="width:56px;height:56px;font-size:1.15rem;">${escapeHTML(p.initials)}</div>
+            <div style="min-width:0;">
+              <h2 class="patient-name">${escapeHTML(p.name)} <span>(${escapeHTML(formatAge(p.age))})</span></h2>
+              <p class="patient-contact">📞 ${escapeHTML(p.phone || 'Sin teléfono')} • ✉️ ${escapeHTML(p.email || 'Sin correo')}</p>
               <div class="skin-badges">
-                <span class="skin-tag">✨ ${p.skinBiotype}</span>
-                <span class="skin-tag">☀️ ${p.fitzpatrick}</span>
-                <span class="skin-tag">🎯 Motivo: ${p.mainConcern}</span>
+                <span class="skin-tag">✨ ${escapeHTML(p.skinBiotype)}</span>
+                <span class="skin-tag">☀️ ${escapeHTML(p.fitzpatrick)}</span>
+                <span class="skin-tag">🎯 ${escapeHTML(p.mainConcern)}</span>
               </div>
             </div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-gold btn-sm" onclick="openNewSessionModal('${p.id}')">
-              ＋ Registrar Sesión en Cabina
-            </button>
-            <button class="btn-soft btn-sm whatsapp-soft" onclick="sendPatientWhatsApp('${p.id}')">WhatsApp</button>
-            ${isStaffManager() ? `<button class="btn-soft btn-sm danger-soft" onclick="askDelete('patient', '${p.id}')">Eliminar clienta</button>` : ''}
+          <div class="patient-actions">
+            <button class="btn-gold btn-sm" onclick="openNewSessionModal('${escapeHTML(p.id)}')">＋ Registrar sesión</button>
+            <button class="btn-soft btn-sm" onclick="openEvaluationModal('${escapeHTML(p.id)}')">📈 Nueva evaluación</button>
+            <button class="btn-soft btn-sm" onclick="openEditPatientModal('${escapeHTML(p.id)}')">✎ Editar datos</button>
+            <button class="btn-soft btn-sm whatsapp-soft" onclick="sendPatientWhatsApp('${escapeHTML(p.id)}')">WhatsApp</button>
+            ${isStaffManager() ? `<button class="btn-soft btn-sm danger-soft" onclick="askDelete('patient', '${escapeHTML(p.id)}')">Eliminar</button>` : ''}
           </div>
         </div>
 
         <div class="clinical-body">
-          <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
-              <div>
-                <h3 style="font-family:var(--font-serif);font-size:1.35rem;">Registro Fotográfico de Evolución (Antes vs. Después)</h3>
-                <p style="font-size:0.82rem;color:var(--text-secondary);">Desliza el control central hacia los lados para comparar la mejoría clínica o sube nuevas fotografías desde tu equipo (se sincronizan con Render + MongoDB).</p>
-              </div>
-              <div style="display:flex;gap:8px;">
-                <label class="btn-soft btn-sm" style="cursor:pointer;">
-                  📷 Subir Foto "Antes"
-                  <input type="file" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event, '${p.id}', 'before')">
-                </label>
-                <label class="btn-soft btn-sm" style="cursor:pointer;">
-                  ✨ Subir Foto "Después"
-                  <input type="file" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event, '${p.id}', 'after')">
-                </label>
-              </div>
-            </div>
-
-            <div class="ba-section-grid">
-              <div class="ba-slider-container" data-ba-slider>
-                <div class="ba-img-layer">
-                  <img src="${patientPhoto(p, 'after')}" alt="Después - ${p.name}">
-                </div>
-                <div class="ba-before-clip" data-ba-clip style="width: 50%;">
-                  <img src="${patientPhoto(p, 'before')}" alt="Antes - ${p.name}" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <span class="ba-label ba-label-before">Antes (Sesión 1)</span>
-                <span class="ba-label ba-label-after">Después (Actual)</span>
-                <div class="ba-handle" data-ba-handle style="left: 50%;">⟷</div>
-                <input type="range" min="5" max="95" value="50" class="ba-range-input" data-ba-input aria-label="Comparador Antes y Después">
-              </div>
-
-              <div class="metrics-progress-list">
-                <div style="font-size:0.85rem;font-weight:700;color:var(--text-primary);margin-bottom:2px;">
-                  Evaluación Cosmetológica de Mejoría
-                </div>
-                ${renderSkinMetricBar('Hidratación y Función Barrera', p.metrics.hydration.before, p.metrics.hydration.current)}
-                ${renderSkinMetricBar('Uniformidad de Tono / Despigmentación', p.metrics.toneUniformity.before, p.metrics.toneUniformity.current)}
-                ${renderSkinMetricBar('Textura, Firmeza y Poros', p.metrics.texturePores.before, p.metrics.texturePores.current)}
-                ${renderSkinMetricBar('Control de Imperfecciones y Eritema', p.metrics.blemishControl.before, p.metrics.blemishControl.current)}
-                <div style="font-size:0.78rem;color:var(--text-secondary);background:#FAF8F3;padding:10px 12px;border-radius:10px;border:1px solid var(--border-card);">
-                  <strong>Alergias / Precauciones:</strong> ${p.allergies}
-                </div>
-              </div>
-            </div>
+          <div class="patient-stats">
+            <div><span>Sesiones</span><strong>${(p.sessions || []).length}</strong></div>
+            <div><span>Primera visita</span><strong>${sessionDates[0] ? escapeHTML(formatDateShort(sessionDates[0])) : '—'}</strong></div>
+            <div><span>Última visita</span><strong>${sessionDates.length ? escapeHTML(formatDateShort(sessionDates[sessionDates.length - 1])) : '—'}</strong></div>
+            <div><span>Próxima cita</span><strong>${nextAppt ? `${escapeHTML(formatDateShort(nextAppt.date))} • ${escapeHTML(nextAppt.time)}` : 'Sin cita'}</strong></div>
           </div>
 
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-              <h3 style="font-family:var(--font-serif);font-size:1.3rem;">Rutina de Skincare en Casa Recetada</h3>
-              <button class="btn-soft btn-sm" onclick="saveRoutineChanges('${p.id}')">💾 Guardar Cambios en Rutina</button>
+          ${p.allergies && !/^ningun/i.test(p.allergies) ? `
+            <div class="allergy-alert">⚠️ <strong>Alergias / precauciones:</strong> ${escapeHTML(p.allergies)}</div>
+          ` : ''}
+
+          <section>
+            <div class="section-head">
+              <h3>Seguimiento del progreso</h3>
+              <button class="btn-soft btn-sm" onclick="openEvaluationModal('${escapeHTML(p.id)}')">＋ Nueva evaluación</button>
+            </div>
+            ${renderProgressSection(p)}
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Plan de tratamiento</h3>
+              <button class="btn-soft btn-sm" onclick="saveTreatmentPlan('${escapeHTML(p.id)}')">💾 Guardar plan</button>
+            </div>
+            <textarea id="treatmentPlan_${escapeHTML(p.id)}" class="form-control" rows="3" style="width:100%;" placeholder="Objetivos, protocolo recomendado, frecuencia de sesiones, próximos pasos…">${escapeHTML(p.treatmentPlan || '')}</textarea>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Rutina en casa</h3>
+              <button class="btn-soft btn-sm" onclick="saveRoutineChanges('${escapeHTML(p.id)}')">💾 Guardar rutina</button>
             </div>
             <div class="routine-grid">
               <div class="routine-box">
-                <h4>☀️ Rutina de Día (AM)</h4>
-                <textarea id="routineAM_${p.id}" class="form-control" rows="4" style="width:100%;background:#FFFFFF;">${p.homeRoutineAM}</textarea>
+                <h4>☀️ Día (AM)</h4>
+                <textarea id="routineAM_${escapeHTML(p.id)}" class="form-control" rows="4" style="width:100%;background:#FFFFFF;">${escapeHTML(p.homeRoutineAM || '')}</textarea>
               </div>
               <div class="routine-box">
-                <h4>🌙 Rutina de Noche (PM)</h4>
-                <textarea id="routinePM_${p.id}" class="form-control" rows="4" style="width:100%;background:#FFFFFF;">${p.homeRoutinePM}</textarea>
+                <h4>🌙 Noche (PM)</h4>
+                <textarea id="routinePM_${escapeHTML(p.id)}" class="form-control" rows="4" style="width:100%;background:#FFFFFF;">${escapeHTML(p.homeRoutinePM || '')}</textarea>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div>
-            <h3 style="font-family:var(--font-serif);font-size:1.3rem;margin-bottom:12px;">
-              Historial Clínico de Sesiones (${p.sessions.length})
-            </h3>
-            <div class="session-timeline">
-              ${p.sessions.map(ses => `
-                <div class="session-card">
-                  <div class="session-card-top">
-                    <div>
-                      <strong style="font-size:0.95rem;color:var(--text-primary);">${ses.treatmentName}</strong>
-                      <span style="font-size:0.8rem;color:var(--text-secondary);margin-left:8px;">• ${ses.specialistName}</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:10px;">
-                      <span class="status-pill status-confirmed"><span class="dot"></span> Mejoría: ${ses.improvementScore}</span>
-                      <span style="font-size:0.8rem;font-weight:600;color:var(--gold-hover);">${ses.date}</span>
-                    </div>
-                  </div>
-                  <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;">
-                    <strong>Activos y Aparatología Aplicada:</strong> ${ses.activesApplied}
-                  </p>
-                  <p style="font-size:0.84rem;color:var(--text-primary);">
-                    <strong>Evolución y Observaciones:</strong> ${ses.notes}
-                  </p>
-                </div>
-              `).join('')}
+          <section>
+            <div class="section-head">
+              <h3>Sesiones en cabina (${(p.sessions || []).length})</h3>
+              <button class="btn-soft btn-sm" onclick="openNewSessionModal('${escapeHTML(p.id)}')">＋ Registrar sesión</button>
             </div>
-          </div>
+            ${(p.sessions || []).length ? `
+              <div class="session-timeline">
+                ${[...p.sessions].sort((a, b) => String(b.date).localeCompare(String(a.date))).map(ses => `
+                  <div class="session-card">
+                    <div class="session-card-top">
+                      <div style="min-width:0;">
+                        <strong style="font-size:0.95rem;color:var(--text-primary);">${escapeHTML(ses.treatmentName)}</strong>
+                        <span style="font-size:0.8rem;color:var(--text-secondary);"> • ${escapeHTML(ses.specialistName)}</span>
+                      </div>
+                      <div class="session-meta">
+                        ${ses.improvementScore ? `<span class="status-pill status-confirmed"><span class="dot"></span>${escapeHTML(ses.improvementScore)}</span>` : ''}
+                        <span class="session-date">${escapeHTML(formatDateShort(ses.date))}</span>
+                        <button class="round-action-btn" title="Editar sesión" onclick="openEditSessionModal('${escapeHTML(p.id)}', '${escapeHTML(ses.id)}')">✎</button>
+                        <button class="round-action-btn danger-btn" title="Eliminar sesión" onclick="askDeleteSession('${escapeHTML(p.id)}', '${escapeHTML(ses.id)}')">✕</button>
+                      </div>
+                    </div>
+                    ${ses.activesApplied ? `<p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;"><strong>Activos y aparatología:</strong> ${escapeHTML(ses.activesApplied)}</p>` : ''}
+                    ${ses.notes ? `<p style="font-size:0.84rem;color:var(--text-primary);"><strong>Evolución y observaciones:</strong> ${escapeHTML(ses.notes)}</p>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<div class="progress-empty"><p>Aún no hay sesiones registradas.</p></div>'}
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Citas (${appts.length})</h3>
+              <button class="btn-soft btn-sm" onclick="openAppointmentModal(null, null, '${escapeHTML(p.id)}')">＋ Agendar</button>
+            </div>
+            ${appts.length ? `
+              <div class="patient-appts">
+                ${[...appts].reverse().map(a => `
+                  <div class="patient-appt">
+                    <div>
+                      <strong>${escapeHTML(formatDateShort(a.date))} • ${escapeHTML(a.time)}</strong>
+                      <p>${escapeHTML(a.treatmentName)} • ${escapeHTML(a.specialistName)}</p>
+                    </div>
+                    <span class="status-pill ${statusClass(a.status)}"><span class="dot"></span>${escapeHTML(a.status)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<div class="progress-empty"><p>Sin citas registradas.</p></div>'}
+          </section>
         </div>
       </div>
     </div>
   `;
+}
+
+function saveTreatmentPlan(patientId) {
+  const patient = state.patients.find(p => p.id === patientId);
+  const el = document.getElementById(`treatmentPlan_${patientId}`);
+  if (!patient || !el) return;
+  patient.treatmentPlan = el.value.trim();
+  saveState();
+  showToast(`Plan de tratamiento guardado para ${patient.name}.`);
+}
+
+// ---------------------------------------------------------------------------
+// Editar datos de la paciente
+// ---------------------------------------------------------------------------
+const SKIN_TYPES = ['Por evaluar', 'Piel Normal', 'Piel Seca', 'Piel Grasa', 'Piel Mixta', 'Piel Mixta Deshidratada', 'Piel Sensible', 'Piel Sensible / Rosácea Leve', 'Piel Grasa Seborreica', 'Piel Madura'];
+const FITZPATRICK = ['Por evaluar', 'Fototipo I', 'Fototipo II', 'Fototipo III', 'Fototipo IV', 'Fototipo V', 'Fototipo VI'];
+
+function openEditPatientModal(patientId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const fitzOptions = FITZPATRICK.includes(p.fitzpatrick) ? FITZPATRICK : [p.fitzpatrick, ...FITZPATRICK];
+  openModalWithHTML(
+    `Editar datos — ${p.name}`,
+    `
+      <div class="form-group">
+        <label for="mEpName">Nombre completo</label>
+        <input id="mEpName" class="form-control" maxlength="80" value="${escapeHTML(p.name)}">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mEpPhone">Teléfono / WhatsApp</label>
+          <input id="mEpPhone" class="form-control" type="tel" maxlength="30" value="${escapeHTML(p.phone || '')}">
+        </div>
+        <div class="form-group">
+          <label for="mEpAge">Edad</label>
+          <input id="mEpAge" class="form-control" type="number" min="12" max="110" value="${escapeHTML(p.age || '')}" placeholder="Opcional">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="mEpEmail">Correo</label>
+        <input id="mEpEmail" class="form-control" type="email" maxlength="120" value="${escapeHTML(p.email || '')}">
+        ${p.source === 'Registro Web' ? '<span class="admin-gate-hint" style="text-align:left;margin-top:2px;">Es solo de contacto: el correo con que la clienta entra a la página de reservas no cambia.</span>' : ''}
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mEpBiotype">Biotipo de piel</label>
+          <input id="mEpBiotype" class="form-control" list="skinTypeOptions" maxlength="60" value="${escapeHTML(p.skinBiotype || '')}">
+          <datalist id="skinTypeOptions">${SKIN_TYPES.map(o => `<option value="${escapeHTML(o)}">`).join('')}</datalist>
+        </div>
+        <div class="form-group">
+          <label for="mEpFitz">Fototipo (Fitzpatrick)</label>
+          <select id="mEpFitz" class="form-control">
+            ${fitzOptions.map(o => `<option ${o === p.fitzpatrick ? 'selected' : ''}>${escapeHTML(o)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="mEpConcern">Motivo de consulta / objetivo</label>
+        <input id="mEpConcern" class="form-control" maxlength="160" value="${escapeHTML(p.mainConcern || '')}">
+      </div>
+      <div class="form-group">
+        <label for="mEpAllergies">Alergias / precauciones</label>
+        <input id="mEpAllergies" class="form-control" maxlength="160" value="${escapeHTML(p.allergies || '')}">
+      </div>
+      <p id="mEpMsg" class="form-message" hidden></p>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" onclick="savePatientEdits('${escapeHTML(p.id)}')">Guardar cambios</button>
+    `
+  );
+}
+
+function savePatientEdits(patientId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const msg = document.getElementById('mEpMsg');
+  const name = document.getElementById('mEpName').value.trim();
+  const email = document.getElementById('mEpEmail').value.trim();
+  const ageRaw = document.getElementById('mEpAge').value;
+  if (name.length < 3) {
+    msg.textContent = 'Escribe el nombre completo.';
+    msg.hidden = false;
+    return;
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    msg.textContent = 'Revisa el correo.';
+    msg.hidden = false;
+    return;
+  }
+  const age = Number(ageRaw);
+  Object.assign(p, {
+    name,
+    initials: getInitials(name),
+    phone: document.getElementById('mEpPhone').value.trim(),
+    email,
+    age: ageRaw && age >= 12 && age <= 110 ? Math.round(age) : null,
+    skinBiotype: document.getElementById('mEpBiotype').value.trim() || 'Por evaluar',
+    fitzpatrick: document.getElementById('mEpFitz').value,
+    mainConcern: document.getElementById('mEpConcern').value.trim() || 'Por definir',
+    allergies: document.getElementById('mEpAllergies').value.trim() || 'Ninguna conocida'
+  });
+  // Las citas guardan el nombre de la paciente: se actualiza para que la agenda coincida
+  state.appointments.forEach(a => {
+    if (a.patientId === p.id) {
+      a.patientName = p.name;
+      a.initials = p.initials;
+    }
+  });
+  saveState();
+  closeModal();
+  showToast('Datos de la paciente actualizados.');
+  renderWorkspace();
+}
+
+// ---------------------------------------------------------------------------
+// Evaluaciones (seguimiento)
+// ---------------------------------------------------------------------------
+function openEvaluationModal(patientId, evalId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const log = progressLogOf(p);
+  const existing = evalId ? log.find(e => e.id === evalId) : null;
+  const base = existing || log[log.length - 1] || {};
+  const me = getCurrentStaff();
+  openModalWithHTML(
+    existing ? 'Editar evaluación' : `Nueva evaluación — ${p.name}`,
+    `
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mEvDate">Fecha</label>
+          <input id="mEvDate" type="date" class="form-control" value="${escapeHTML(existing?.date || toISODate(new Date()))}">
+        </div>
+        <div class="form-group">
+          <label for="mEvBy">Evaluó</label>
+          <input id="mEvBy" class="form-control" list="evSpecialists" maxlength="80" value="${escapeHTML(existing?.specialistName ?? (me?.isMaster ? '' : me?.name || ''))}">
+          <datalist id="evSpecialists">${state.specialists.map(s => `<option value="${escapeHTML(s.name)}">`).join('')}</datalist>
+        </div>
+      </div>
+      <p class="admin-gate-hint" style="text-align:left;margin-top:-4px;">Califica cada indicador de 0 a 100 según lo observado hoy.</p>
+      ${METRIC_DEFS.map(([k, label]) => `
+        <div class="form-group eval-slider">
+          <label for="mEv_${k}">${escapeHTML(label)} <output id="mEvOut_${k}">${Number(base[k]) || 0}%</output></label>
+          <input id="mEv_${k}" type="range" min="0" max="100" step="1" value="${Number(base[k]) || 0}"
+                 oninput="document.getElementById('mEvOut_${k}').textContent = this.value + '%'">
+        </div>
+      `).join('')}
+      <div class="form-group">
+        <label for="mEvNotes">Observaciones</label>
+        <textarea id="mEvNotes" class="form-control" rows="3" maxlength="600" placeholder="Cómo se ve la piel, cambios desde la última visita, recomendaciones…">${escapeHTML(existing?.notes || '')}</textarea>
+      </div>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" onclick="saveEvaluation('${escapeHTML(p.id)}', ${existing ? `'${escapeHTML(existing.id)}'` : 'null'})">${existing ? 'Guardar cambios' : 'Guardar evaluación'}</button>
+    `
+  );
+}
+
+function saveEvaluation(patientId, evalId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const legacyIndex = evalId && evalId.startsWith('legacy-') ? Number(evalId.split('-')[1]) - 1 : -1;
+  materializeProgressLog(p);
+  const values = {
+    date: document.getElementById('mEvDate').value || toISODate(new Date()),
+    specialistName: document.getElementById('mEvBy').value.trim(),
+    notes: document.getElementById('mEvNotes').value.trim()
+  };
+  METRIC_DEFS.forEach(([k]) => { values[k] = Number(document.getElementById(`mEv_${k}`).value) || 0; });
+
+  const sorted = [...p.progressLog].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const target = legacyIndex >= 0 ? sorted[legacyIndex] : (evalId ? p.progressLog.find(e => e.id === evalId) : null);
+  if (target) Object.assign(target, values);
+  else p.progressLog.push({ id: `eval-${Date.now()}`, ...values });
+
+  syncMetricsFromLog(p);
+  saveState();
+  closeModal();
+  showToast(target ? 'Evaluación actualizada.' : 'Evaluación registrada.');
+  renderWorkspace();
+}
+
+// Confirmación genérica para borrar registros del expediente
+function openConfirmModal(title, message, action) {
+  uiState.pendingConfirm = action;
+  openModalWithHTML(
+    title,
+    `<p style="font-size:0.9rem;">${message}</p><p class="form-message">Esta acción no se puede deshacer.</p>`,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-danger" onclick="runPendingConfirm()">Eliminar</button>
+    `
+  );
+}
+
+function runPendingConfirm() {
+  const action = uiState.pendingConfirm;
+  uiState.pendingConfirm = null;
+  closeModal();
+  if (typeof action === 'function') action();
+}
+
+function askDeleteEvaluation(patientId, evalId) {
+  const p = state.patients.find(x => x.id === patientId);
+  const e = p && progressLogOf(p).find(x => x.id === evalId);
+  if (!e) return;
+  openConfirmModal('Eliminar evaluación', `Se eliminará la evaluación del ${escapeHTML(e.date ? formatDateLong(e.date) : 'registro sin fecha')}.`, () => {
+    const legacyIndex = evalId.startsWith('legacy-') ? Number(evalId.split('-')[1]) - 1 : -1;
+    materializeProgressLog(p);
+    const sorted = [...p.progressLog].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const target = legacyIndex >= 0 ? sorted[legacyIndex] : p.progressLog.find(x => x.id === evalId);
+    p.progressLog = p.progressLog.filter(x => x !== target);
+    syncMetricsFromLog(p);
+    saveState();
+    showToast('Evaluación eliminada.');
+    renderWorkspace();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Sesiones: editar y eliminar
+// ---------------------------------------------------------------------------
+function openEditSessionModal(patientId, sessionId) {
+  const p = state.patients.find(x => x.id === patientId);
+  const ses = p?.sessions.find(s => s.id === sessionId);
+  if (!ses) return;
+  openModalWithHTML(
+    'Editar sesión',
+    `
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mEsDate">Fecha</label>
+          <input id="mEsDate" type="date" class="form-control" value="${escapeHTML(ses.date)}">
+        </div>
+        <div class="form-group">
+          <label for="mEsSpecialist">Especialista</label>
+          <input id="mEsSpecialist" class="form-control" list="esSpecialists" value="${escapeHTML(ses.specialistName)}">
+          <datalist id="esSpecialists">${state.specialists.map(s => `<option value="${escapeHTML(s.name)}">`).join('')}</datalist>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="mEsTreatment">Tratamiento</label>
+        <input id="mEsTreatment" class="form-control" list="esTreatments" value="${escapeHTML(ses.treatmentName)}">
+        <datalist id="esTreatments">${state.treatments.map(t => `<option value="${escapeHTML(t.name)}">`).join('')}</datalist>
+      </div>
+      <div class="form-group">
+        <label for="mEsActives">Activos y aparatología</label>
+        <input id="mEsActives" class="form-control" value="${escapeHTML(ses.activesApplied || '')}">
+      </div>
+      <div class="form-group">
+        <label for="mEsResult">Resultado / respuesta de la piel (opcional)</label>
+        <input id="mEsResult" class="form-control" maxlength="80" value="${escapeHTML(ses.improvementScore || '')}" placeholder="Ej. Buena tolerancia, leve eritema">
+      </div>
+      <div class="form-group">
+        <label for="mEsNotes">Evolución y observaciones</label>
+        <textarea id="mEsNotes" class="form-control" rows="3">${escapeHTML(ses.notes || '')}</textarea>
+      </div>
+      <p class="admin-gate-hint" style="text-align:left;">Editar no cambia cobros ni inventario ya registrados.</p>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" onclick="saveSessionEdits('${escapeHTML(p.id)}', '${escapeHTML(ses.id)}')">Guardar cambios</button>
+    `
+  );
+}
+
+function saveSessionEdits(patientId, sessionId) {
+  const p = state.patients.find(x => x.id === patientId);
+  const ses = p?.sessions.find(s => s.id === sessionId);
+  if (!ses) return;
+  Object.assign(ses, {
+    date: document.getElementById('mEsDate').value || ses.date,
+    specialistName: document.getElementById('mEsSpecialist').value.trim() || ses.specialistName,
+    treatmentName: document.getElementById('mEsTreatment').value.trim() || ses.treatmentName,
+    activesApplied: document.getElementById('mEsActives').value.trim(),
+    improvementScore: document.getElementById('mEsResult').value.trim(),
+    notes: document.getElementById('mEsNotes').value.trim()
+  });
+  saveState();
+  closeModal();
+  showToast('Sesión actualizada.');
+  renderWorkspace();
+}
+
+function askDeleteSession(patientId, sessionId) {
+  const p = state.patients.find(x => x.id === patientId);
+  const ses = p?.sessions.find(s => s.id === sessionId);
+  if (!ses) return;
+  openConfirmModal('Eliminar sesión', `Se eliminará la sesión de <strong>${escapeHTML(ses.treatmentName)}</strong> del ${escapeHTML(formatDateLong(ses.date))} del expediente. Los cobros e inventario no cambian.`, () => {
+    p.sessions = p.sessions.filter(s => s.id !== sessionId);
+    saveState();
+    showToast('Sesión eliminada del expediente.');
+    renderWorkspace();
+  });
 }
 
 function renderSkinMetricBar(label, beforeVal, currentVal) {
@@ -2340,41 +2753,6 @@ function renderSkinMetricBar(label, beforeVal, currentVal) {
       </div>
     </div>
   `;
-}
-
-function initBeforeAfterSliders() {
-  document.querySelectorAll('[data-ba-slider]').forEach(container => {
-    const input = container.querySelector('[data-ba-input]');
-    const clip = container.querySelector('[data-ba-clip]');
-    const handle = container.querySelector('[data-ba-handle]');
-    if (!input || !clip || !handle) return;
-
-    const updateSlider = () => {
-      const val = input.value;
-      clip.style.width = `${val}%`;
-      handle.style.left = `${val}%`;
-    };
-    input.addEventListener('input', updateSlider);
-  });
-}
-
-function handlePhotoUpload(event, patientId, mode) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const patient = state.patients.find(p => p.id === patientId);
-    if (!patient) return;
-    if (mode === 'before') {
-      patient.beforePhoto = e.target.result;
-    } else {
-      patient.afterPhoto = e.target.result;
-    }
-    saveState();
-    showToast(`Fotografía "${mode === 'before' ? 'Antes' : 'Después'}" actualizada en el récord de ${patient.name}.`);
-    renderWorkspace();
-  };
-  reader.readAsDataURL(file);
 }
 
 function saveRoutineChanges(patientId) {
@@ -2761,7 +3139,7 @@ function renderClientPortalView() {
               Agendar Cita
             </button>
             <button class="mode-btn ${uiState.portalTab === 'record' ? 'active' : ''}" style="justify-content:center;" onclick="setPortalTab('record')">
-              Mi Récord y Fotos
+              Mi Récord y Progreso
             </button>
           </div>
 
@@ -2841,18 +3219,6 @@ function renderClientPortalView() {
             </button>
           ` : `
             <div style="display:flex;flex-direction:column;gap:14px;">
-              <div class="ba-slider-container" data-ba-slider style="height:220px;">
-                <div class="ba-img-layer">
-                  <img src="${patientPhoto(client, 'after')}" alt="Después">
-                </div>
-                <div class="ba-before-clip" data-ba-clip style="width:50%;">
-                  <img src="${patientPhoto(client, 'before')}" alt="Antes" style="width:100%;height:100%;object-fit:cover;">
-                </div>
-                <span class="ba-label ba-label-before">Antes</span>
-                <span class="ba-label ba-label-after">Ahora</span>
-                <div class="ba-handle" data-ba-handle style="left:50%;">⟷</div>
-                <input type="range" min="5" max="95" value="50" class="ba-range-input" data-ba-input>
-              </div>
               <div style="background:#FFFFFF;padding:12px 14px;border-radius:14px;border:1px solid var(--border-light);">
                 <div style="font-size:0.84rem;font-weight:700;margin-bottom:4px;">☀️ Mi Rutina de Día (AM)</div>
                 <p style="font-size:0.76rem;color:var(--text-secondary);white-space:pre-line;">${client.homeRoutineAM}</p>
@@ -2875,34 +3241,14 @@ function renderClientPortalView() {
               Diagnóstico Niskin: <strong>${client.skinBiotype}</strong> (${client.fitzpatrick}) • Objetivo: ${client.mainConcern}
             </p>
           </div>
-          <label class="btn-gold btn-sm" style="cursor:pointer;">
-            📸 Subir Mi Foto de Seguimiento
-            <input type="file" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event, '${client.id}', 'after')">
-          </label>
         </div>
 
         <div class="clinical-body">
           <div>
             <h3 style="font-family:var(--font-serif);font-size:1.35rem;margin-bottom:6px;">
-              Mi Evolución Fotográfica (Antes y Después)
+              Mi Progreso
             </h3>
-            <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:14px;">
-              Desliza el círculo dorado para comparar el estado inicial de tu piel en la primera evaluación frente a tu mejoría actual.
-            </p>
-            <div class="ba-section-grid">
-              <div class="ba-slider-container" data-ba-slider>
-                <div class="ba-img-layer">
-                  <img src="${patientPhoto(client, 'after')}" alt="Después - ${client.name}">
-                </div>
-                <div class="ba-before-clip" data-ba-clip style="width: 50%;">
-                  <img src="${patientPhoto(client, 'before')}" alt="Antes - ${client.name}" style="width:100%;height:100%;object-fit:cover;">
-                </div>
-                <span class="ba-label ba-label-before">Sesión 1 (Antes)</span>
-                <span class="ba-label ba-label-after">Actualidad (Después)</span>
-                <div class="ba-handle" data-ba-handle style="left: 50%;">⟷</div>
-                <input type="range" min="5" max="95" value="50" class="ba-range-input" data-ba-input>
-              </div>
-
+            <div>
               <div class="metrics-progress-list">
                 <div style="font-size:0.88rem;font-weight:700;color:var(--gold-hover);">
                   Progreso de Salud Cutánea
@@ -2958,7 +3304,7 @@ function renderClientPortalView() {
                 <div class="session-card">
                   <div class="session-card-top">
                     <strong>${s.treatmentName}</strong>
-                    <span class="status-pill status-confirmed"><span class="dot"></span> Evolución: ${s.improvementScore} • ${s.date}</span>
+                    <span class="status-pill status-confirmed"><span class="dot"></span>${s.improvementScore ? `Resultado: ${escapeHTML(s.improvementScore)} • ` : ''}${s.date}</span>
                   </div>
                   <p style="font-size:0.82rem;color:var(--text-secondary);"><strong>Activos aplicados en tu piel:</strong> ${s.activesApplied}</p>
                   <p style="font-size:0.84rem;margin-top:4px;"><strong>Notas de tu especialista (${s.specialistName}):</strong> ${s.notes}</p>
@@ -3072,7 +3418,7 @@ function refreshAppointmentTimeOptions() {
   }
 }
 
-function openAppointmentModal(preselectedTreatmentId, preselectedDate) {
+function openAppointmentModal(preselectedTreatmentId, preselectedDate, preselectedPatientId) {
   const tId = preselectedTreatmentId || state.treatments[0]?.id;
   openModalWithHTML(
     'Agendar Nueva Cita en Niskin Beauty Studio',
@@ -3080,7 +3426,7 @@ function openAppointmentModal(preselectedTreatmentId, preselectedDate) {
       <div class="form-group">
         <label>Paciente</label>
         <select id="mAppPatient" class="form-control">
-          ${state.patients.map(p => `<option value="${p.id}">${p.name} (${p.skinBiotype})</option>`).join('')}
+          ${state.patients.map(p => `<option value="${p.id}" ${p.id === preselectedPatientId ? 'selected' : ''}>${escapeHTML(p.name)} (${escapeHTML(p.skinBiotype)})</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
@@ -3274,36 +3620,14 @@ function saveNewPatient() {
     homeRoutineAM: '1. Gel Limpiador Suave Syndet\n2. Sérum Hidratante Ácido Hialurónico\n3. Protector Solar SPF 50+',
     homeRoutinePM: '1. Doble Limpieza Suave\n2. Sérum Renovador / Niacinamida\n3. Crema Reparadora con Ceramidas',
     metrics: {
-      hydration: { before: 45, current: 78 },
-      toneUniformity: { before: 50, current: 82 },
-      texturePores: { before: 52, current: 80 },
-      blemishControl: { before: 55, current: 85 }
+      hydration: { before: 0, current: 0 },
+      toneUniformity: { before: 0, current: 0 },
+      texturePores: { before: 0, current: 0 },
+      blemishControl: { before: 0, current: 0 }
     },
-    beforePhoto: createSkinVisualSVG({
-      mode: 'before',
-      clientName: name,
-      sessionLabel: 'Antes ( Evaluación Inicial )',
-      dateLabel: uiState.selectedDate,
-      conditionType: 'hydration'
-    }),
-    afterPhoto: createSkinVisualSVG({
-      mode: 'after',
-      clientName: name,
-      sessionLabel: 'Después ( Progreso Actual )',
-      dateLabel: uiState.selectedDate,
-      conditionType: 'hydration'
-    }),
-    sessions: [
-      {
-        id: 'ses-' + Date.now(),
-        date: uiState.selectedDate,
-        treatmentName: 'Evaluación Diagnóstica con Lámpara de Wood',
-        specialistName: 'Lic. Valeria Niskin',
-        activesApplied: 'Higiene facial preparatoria e hidratación calmante',
-        notes: 'Apertura de expediente clínico y toma de fotografías iniciales.',
-        improvementScore: '75%'
-      }
-    ]
+    sessions: [],
+    progressLog: [],
+    treatmentPlan: ''
   };
 
   state.patients.unshift(newPatient);
@@ -3317,40 +3641,47 @@ function saveNewPatient() {
 function openNewSessionModal(patientId) {
   const pat = state.patients.find(p => p.id === patientId);
   if (!pat) return;
+  const me = getCurrentStaff();
 
   openModalWithHTML(
-    `Registrar Sesión en Cabina — ${pat.name}`,
+    `Registrar sesión — ${pat.name}`,
     `
-      <div class="form-group">
-        <label>Tratamiento Realizado (descuenta insumos automáticamente)</label>
-        <select id="mSesTreatment" class="form-control">
-          ${state.treatments.map(t => `<option value="${t.id}">${t.name} (${formatMoney(t.price)})</option>`).join('')}
-        </select>
-      </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Especialista</label>
-          <select id="mSesSpecialist" class="form-control">
-            ${state.specialists.map(s => `<option value="${s.name}">${s.name}</option>`).join('')}
-          </select>
+          <label for="mSesDate">Fecha</label>
+          <input id="mSesDate" type="date" class="form-control" value="${toISODate(new Date())}">
         </div>
         <div class="form-group">
-          <label>Porcentaje de Mejoría Estimado</label>
-          <input type="text" id="mSesScore" class="form-control" value="92%">
+          <label for="mSesSpecialist">Especialista</label>
+          <select id="mSesSpecialist" class="form-control">
+            ${state.specialists.map(s => `<option value="${escapeHTML(s.name)}" ${s.id === me?.specialistId ? 'selected' : ''}>${escapeHTML(s.name)}</option>`).join('')}
+          </select>
         </div>
       </div>
       <div class="form-group">
-        <label>Activos y Aparatología Aplicada en Cabina</label>
-        <input type="text" id="mSesActives" class="form-control" placeholder="Ej. Exosomas, Ácido Hialurónico, Fototerapia LED Roja 15 min">
+        <label for="mSesTreatment">Tratamiento realizado</label>
+        <select id="mSesTreatment" class="form-control">
+          ${state.treatments.map(t => `<option value="${t.id}">${escapeHTML(t.name)} (${formatMoney(t.price)})</option>`).join('')}
+        </select>
       </div>
       <div class="form-group">
-        <label>Notas de Evolución Clínica</label>
-        <textarea id="mSesNotes" class="form-control" rows="3" placeholder="Describe cómo respondió la piel y las recomendaciones post-tratamiento..."></textarea>
+        <label for="mSesActives">Activos y aparatología aplicada</label>
+        <input type="text" id="mSesActives" class="form-control" placeholder="Ej. Exosomas, ácido hialurónico, LED roja 15 min">
       </div>
+      <div class="form-group">
+        <label for="mSesResult">Resultado / respuesta de la piel (opcional)</label>
+        <input type="text" id="mSesResult" class="form-control" maxlength="80" placeholder="Ej. Buena tolerancia, leve eritema">
+      </div>
+      <div class="form-group">
+        <label for="mSesNotes">Evolución y observaciones</label>
+        <textarea id="mSesNotes" class="form-control" rows="3" placeholder="Cómo respondió la piel y recomendaciones post-tratamiento…"></textarea>
+      </div>
+      <label class="settings-switch"><input type="checkbox" id="mSesCharge" checked> <span>Registrar el cobro en Finanzas (no lo marques si la cita ya se cobró al completarla)</span></label>
+      <label class="settings-switch"><input type="checkbox" id="mSesSupplies" checked> <span>Descontar los insumos del tratamiento del inventario</span></label>
     `,
     `
       <button class="btn-soft" onclick="closeModal()">Cancelar</button>
-      <button class="btn-gold" onclick="saveNewSession('${pat.id}')">Registrar Sesión, Insumos e Ingreso</button>
+      <button class="btn-gold" onclick="saveNewSession('${escapeHTML(pat.id)}')">Registrar sesión</button>
     `
   );
 }
@@ -3359,46 +3690,43 @@ function saveNewSession(patientId) {
   const pat = state.patients.find(p => p.id === patientId);
   const tratId = document.getElementById('mSesTreatment').value;
   const trat = state.treatments.find(t => t.id === tratId);
-  const specialistName = document.getElementById('mSesSpecialist').value;
-  const improvementScore = document.getElementById('mSesScore').value || '90%';
-  const activesApplied = document.getElementById('mSesActives').value.trim() || trat?.description || 'Protocolo en cabina';
-  const notes = document.getElementById('mSesNotes').value.trim() || 'Excelente respuesta cutánea al protocolo.';
-
   if (!pat || !trat) return;
+  const date = document.getElementById('mSesDate').value || toISODate(new Date());
+  const charge = document.getElementById('mSesCharge').checked;
+  const useSupplies = document.getElementById('mSesSupplies').checked;
 
   pat.sessions.unshift({
     id: 'ses-' + Date.now(),
-    date: uiState.selectedDate,
+    date,
     treatmentName: trat.name,
-    specialistName,
-    activesApplied,
-    notes,
-    improvementScore
+    specialistName: document.getElementById('mSesSpecialist').value,
+    activesApplied: document.getElementById('mSesActives').value.trim(),
+    notes: document.getElementById('mSesNotes').value.trim(),
+    improvementScore: document.getElementById('mSesResult').value.trim()
   });
 
-  pat.metrics.hydration.current = Math.min(99, pat.metrics.hydration.current + 3);
-  pat.metrics.toneUniformity.current = Math.min(99, pat.metrics.toneUniformity.current + 3);
-
-  if (Array.isArray(trat.suppliesUsed)) {
+  if (useSupplies && Array.isArray(trat.suppliesUsed)) {
     trat.suppliesUsed.forEach(u => {
       const inv = state.inventory.find(i => i.id === u.inventoryId);
       if (inv) inv.stock = Math.max(0, inv.stock - u.qty);
     });
   }
 
-  state.finances.unshift({
-    id: 'fin-' + Date.now(),
-    date: uiState.selectedDate,
-    concept: `Sesión en Cabina: ${trat.name} — ${pat.name}`,
-    category: 'Servicio en Cabina',
-    type: 'Ingreso',
-    method: 'Tarjeta / POS',
-    amount: trat.price
-  });
+  if (charge) {
+    state.finances.unshift({
+      id: 'fin-' + Date.now(),
+      date,
+      concept: `Sesión en cabina: ${trat.name} — ${pat.name}`,
+      category: 'Servicio en Cabina',
+      type: 'Ingreso',
+      method: 'Efectivo',
+      amount: trat.price
+    });
+  }
 
   saveState();
   closeModal();
-  showToast(`Sesión agregada al récord de ${pat.name}, insumos descontados e ingreso sumado.`);
+  showToast(`Sesión registrada en el expediente de ${pat.name}.`);
   renderWorkspace();
 }
 

@@ -1,101 +1,3 @@
-// Generador de ilustraciones clínicas dermatológicas "Antes y Después" en SVG Data URI
-// Permite mostrar una comparativa visual realista desde el primer uso y soporta subida de fotos reales.
-function createSkinVisualSVG({ mode, clientName, sessionLabel, dateLabel, conditionType }) {
-  const isBefore = mode === 'before';
-  const bgGradStart = isBefore ? '#EFE4DC' : '#F8EFE6';
-  const bgGradEnd = isBefore ? '#DFC9BC' : '#EDD8C5';
-  const cheekBase = isBefore ? '#D9B6A3' : '#EACBB8';
-  const glowOpacity = isBefore ? '0.08' : '0.52';
-
-  let skinMarks = '';
-  if (conditionType === 'acne') {
-    skinMarks = isBefore
-      ? `
-        <!-- Enrojecimiento e imperfecciones activas (Antes) -->
-        <circle cx="235" cy="175" r="26" fill="#C96A63" opacity="0.25" filter="url(#blurMark)"/>
-        <circle cx="385" cy="180" r="28" fill="#C96A63" opacity="0.24" filter="url(#blurMark)"/>
-        <circle cx="225" cy="168" r="5" fill="#B84A42" opacity="0.72"/>
-        <circle cx="248" cy="185" r="4" fill="#B84A42" opacity="0.65"/>
-        <circle cx="218" cy="192" r="3.5" fill="#C45B52" opacity="0.6"/>
-        <circle cx="372" cy="172" r="5.5" fill="#B84A42" opacity="0.7"/>
-        <circle cx="395" cy="190" r="4" fill="#B84A42" opacity="0.65"/>
-        <circle cx="365" cy="196" r="3" fill="#C45B52" opacity="0.6"/>
-        <circle cx="310" cy="95" r="4" fill="#B84A42" opacity="0.55"/>
-        <circle cx="292" cy="105" r="3" fill="#B84A42" opacity="0.5"/>
-      `
-      : `
-        <!-- Piel calmada, poros refinados y luminosidad (Después) -->
-        <circle cx="235" cy="175" r="18" fill="#D99B8C" opacity="0.10" filter="url(#blurMark)"/>
-        <circle cx="385" cy="180" r="18" fill="#D99B8C" opacity="0.10" filter="url(#blurMark)"/>
-        <circle cx="225" cy="168" r="2" fill="#C98A7E" opacity="0.22"/>
-        <circle cx="372" cy="172" r="2" fill="#C98A7E" opacity="0.22"/>
-      `;
-  } else if (conditionType === 'melasma') {
-    skinMarks = isBefore
-      ? `
-        <!-- Hiperpigmentación / Manchas solares (Antes) -->
-        <ellipse cx="230" cy="165" rx="34" ry="18" fill="#8C5C3E" opacity="0.34" filter="url(#blurMark)"/>
-        <ellipse cx="390" cy="165" rx="34" ry="18" fill="#8C5C3E" opacity="0.33" filter="url(#blurMark)"/>
-        <ellipse cx="310" cy="96" rx="42" ry="12" fill="#8C5C3E" opacity="0.26" filter="url(#blurMark)"/>
-      `
-      : `
-        <!-- Tono unificado y despigmentado (Después) -->
-        <ellipse cx="230" cy="165" rx="26" ry="14" fill="#9E7155" opacity="0.08" filter="url(#blurMark)"/>
-        <ellipse cx="390" cy="165" rx="26" ry="14" fill="#9E7155" opacity="0.08" filter="url(#blurMark)"/>
-      `;
-  } else {
-    skinMarks = isBefore
-      ? `
-        <!-- Piel deshidratada y líneas finas (Antes) -->
-        <path d="M 215 160 Q 240 168 260 158" stroke="#9E7B66" stroke-width="1.5" opacity="0.45" fill="none"/>
-        <path d="M 360 158 Q 380 168 405 160" stroke="#9E7B66" stroke-width="1.5" opacity="0.45" fill="none"/>
-        <ellipse cx="235" cy="175" rx="28" ry="16" fill="#A6826D" opacity="0.22" filter="url(#blurMark)"/>
-        <ellipse cx="385" cy="175" rx="28" ry="16" fill="#A6826D" opacity="0.22" filter="url(#blurMark)"/>
-      `
-      : `
-        <!-- Efecto HydraGlow y firmeza (Después) -->
-        <ellipse cx="235" cy="162" rx="28" ry="14" fill="#FFFFFF" opacity="0.45" filter="url(#blurMark)"/>
-        <ellipse cx="385" cy="162" rx="28" ry="14" fill="#FFFFFF" opacity="0.45" filter="url(#blurMark)"/>
-      `;
-  }
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 380">
-    <defs>
-      <linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="${bgGradStart}"/>
-        <stop offset="100%" stop-color="${bgGradEnd}"/>
-      </linearGradient>
-      <radialGradient id="skinGlow" cx="50%" cy="42%" r="48%">
-        <stop offset="0%" stop-color="#FFFDF9" stop-opacity="${glowOpacity}"/>
-        <stop offset="100%" stop-color="${cheekBase}" stop-opacity="0"/>
-      </radialGradient>
-      <filter id="blurMark">
-        <feGaussianBlur stdDeviation="7"/>
-      </filter>
-    </defs>
-    <rect width="620" height="380" fill="url(#bgG)"/>
-    <!-- Círculo estético de fondo -->
-    <circle cx="310" cy="185" r="148" fill="#FAF6F0" opacity="0.55"/>
-    <!-- Silueta facial estética -->
-    <path d="M 205 120 C 205 55, 415 55, 415 120 C 420 205, 375 288, 310 298 C 245 288, 200 205, 205 120 Z" fill="${cheekBase}" stroke="#B89378" stroke-width="2"/>
-    <ellipse cx="310" cy="170" rx="98" ry="115" fill="url(#skinGlow)"/>
-    <!-- Cejas y ojos cerrados relajados en cabina -->
-    <path d="M 232 132 Q 258 120 282 130" stroke="#6E523E" stroke-width="3" stroke-linecap="round" fill="none"/>
-    <path d="M 338 130 Q 362 120 388 132" stroke="#6E523E" stroke-width="3" stroke-linecap="round" fill="none"/>
-    <path d="M 238 148 Q 258 158 278 148" stroke="#6E523E" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-    <path d="M 342 148 Q 362 158 382 148" stroke="#6E523E" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-    <!-- Nariz y labios suaves -->
-    <path d="M 310 148 L 306 196 Q 310 202 316 196" stroke="#A67F64" stroke-width="2" stroke-linecap="round" fill="none"/>
-    <path d="M 282 232 Q 310 245 338 232 Q 310 237 282 232 Z" fill="${isBefore ? '#C48A7E' : '#D4887A'}" opacity="0.85"/>
-    ${skinMarks}
-    <!-- Etiqueta clínica inferior -->
-    <rect x="24" y="322" width="572" height="42" rx="12" fill="#37332F" opacity="0.82"/>
-    <text x="42" y="348" font-family="Plus Jakarta Sans, sans-serif" font-size="13" font-weight="600" fill="#FBFAF7">${clientName} • ${sessionLabel}</text>
-    <text x="576" y="348" text-anchor="end" font-family="Plus Jakarta Sans, sans-serif" font-size="12" fill="#DFCDA8">${dateLabel}</text>
-  </svg>`;
-
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-}
 
 const INITIAL_NISKIN_DATA = {
   studioInfo: {
@@ -222,20 +124,6 @@ const INITIAL_NISKIN_DATA = {
         texturePores: { before: 50, current: 84 },
         blemishControl: { before: 38, current: 92 }
       },
-      beforePhoto: createSkinVisualSVG({
-        mode: 'before',
-        clientName: 'Valeria Méndez',
-        sessionLabel: 'Antes ( Evaluación Inicial - Sesión 1 )',
-        dateLabel: '12 Ago 2026',
-        conditionType: 'acne'
-      }),
-      afterPhoto: createSkinVisualSVG({
-        mode: 'after',
-        clientName: 'Valeria Méndez',
-        sessionLabel: 'Después ( Sesión 4 - Evolución Clínica )',
-        dateLabel: '14 Oct 2026',
-        conditionType: 'acne'
-      }),
       sessions: [
         {
           id: 'ses-101',
@@ -286,20 +174,6 @@ const INITIAL_NISKIN_DATA = {
         texturePores: { before: 62, current: 90 },
         blemishControl: { before: 75, current: 95 }
       },
-      beforePhoto: createSkinVisualSVG({
-        mode: 'before',
-        clientName: 'Carolina Santos',
-        sessionLabel: 'Antes ( Sesión 1 - Melasma Malar )',
-        dateLabel: '20 Ago 2026',
-        conditionType: 'melasma'
-      }),
-      afterPhoto: createSkinVisualSVG({
-        mode: 'after',
-        clientName: 'Carolina Santos',
-        sessionLabel: 'Después ( Sesión 3 - Tono Unificado )',
-        dateLabel: '10 Oct 2026',
-        conditionType: 'melasma'
-      }),
       sessions: [
         {
           id: 'ses-201',
@@ -341,20 +215,6 @@ const INITIAL_NISKIN_DATA = {
         texturePores: { before: 54, current: 88 },
         blemishControl: { before: 82, current: 96 }
       },
-      beforePhoto: createSkinVisualSVG({
-        mode: 'before',
-        clientName: 'Mariela Gómez',
-        sessionLabel: 'Antes ( Piel Deshidratada )',
-        dateLabel: '01 Sep 2026',
-        conditionType: 'hydration'
-      }),
-      afterPhoto: createSkinVisualSVG({
-        mode: 'after',
-        clientName: 'Mariela Gómez',
-        sessionLabel: 'Después ( Efecto HydraGlow & Firmeza )',
-        dateLabel: '12 Oct 2026',
-        conditionType: 'hydration'
-      }),
       sessions: [
         {
           id: 'ses-301',
@@ -387,20 +247,6 @@ const INITIAL_NISKIN_DATA = {
         texturePores: { before: 42, current: 85 },
         blemishControl: { before: 49, current: 89 }
       },
-      beforePhoto: createSkinVisualSVG({
-        mode: 'before',
-        clientName: 'Lucía Fernández',
-        sessionLabel: 'Antes ( Poros y Comedones )',
-        dateLabel: '15 Sep 2026',
-        conditionType: 'acne'
-      }),
-      afterPhoto: createSkinVisualSVG({
-        mode: 'after',
-        clientName: 'Lucía Fernández',
-        sessionLabel: 'Después ( Textura Refinada )',
-        dateLabel: '13 Oct 2026',
-        conditionType: 'acne'
-      }),
       sessions: [
         {
           id: 'ses-401',
@@ -433,20 +279,6 @@ const INITIAL_NISKIN_DATA = {
         texturePores: { before: 68, current: 91 },
         blemishControl: { before: 60, current: 93 }
       },
-      beforePhoto: createSkinVisualSVG({
-        mode: 'before',
-        clientName: 'Gabriela Polanco',
-        sessionLabel: 'Antes ( Eritema y Sensibilidad )',
-        dateLabel: '25 Sep 2026',
-        conditionType: 'hydration'
-      }),
-      afterPhoto: createSkinVisualSVG({
-        mode: 'after',
-        clientName: 'Gabriela Polanco',
-        sessionLabel: 'Después ( Barrera Cutánea Restaurada )',
-        dateLabel: '14 Oct 2026',
-        conditionType: 'hydration'
-      }),
       sessions: [
         {
           id: 'ses-501',

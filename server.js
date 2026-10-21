@@ -53,9 +53,9 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .filter(Boolean);
 app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : {}));
 
-// Límite ampliado a 25MB para permitir subida de fotografías clínicas Antes/Después en alta resolución
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+// Sin fotos en la app, 2MB alcanza de sobra para sincronizar el estado del estudio
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Servir solo los archivos públicos del frontend (nunca server.js, modelos ni configuración)
 const PUBLIC_FILES = [
@@ -307,8 +307,13 @@ function toClientProfile(patient) {
     homeRoutineAM: patient.homeRoutineAM,
     homeRoutinePM: patient.homeRoutinePM,
     metrics: patient.metrics,
-    beforePhoto: patient.beforePhoto,
-    afterPhoto: patient.afterPhoto,
+    progressLog: (patient.progressLog || []).map(e => ({
+      date: e.date,
+      hydration: e.hydration,
+      toneUniformity: e.toneUniformity,
+      texturePores: e.texturePores,
+      blemishControl: e.blemishControl
+    })),
     sessions: (patient.sessions || []).map(s => ({
       id: s.id,
       date: s.date,
@@ -578,7 +583,8 @@ app.patch('/api/admin/staff/:id', requireAdmin, requireStaffManager, requireMong
 app.get('/api/state', requireAdmin, requireMongo, async (req, res) => {
   try {
     const [patients, appointments, inventory, finances, treatments, specialists] = await Promise.all([
-      Patient.find({}).sort({ createdAt: -1 }).lean(),
+      // Las fotos ya no se usan: no se envían (las que existan quedan intactas en la base de datos)
+      Patient.find({}).select('-beforePhoto -afterPhoto').sort({ createdAt: -1 }).lean(),
       Appointment.find({}).sort({ date: 1, time: 1 }).lean(),
       Inventory.find({}).sort({ category: 1, name: 1 }).lean(),
       Finance.find({}).sort({ date: -1, createdAt: -1 }).lean(),
@@ -657,7 +663,7 @@ app.post('/api/state', requireAdmin, requireMongo, async (req, res) => {
       .map(([key, Model]) =>
         Model.bulkWrite(
           incoming[key].map(item => {
-            const { _id, __v, createdAt, updatedAt, ...fields } = item;
+            const { _id, __v, createdAt, updatedAt, beforePhoto, afterPhoto, ...fields } = item;
             return {
               updateOne: {
                 filter: { id: item.id },
@@ -991,8 +997,6 @@ app.post('/api/client/register', authLimiter, requireMongo, async (req, res) => 
         texturePores: { before: 0, current: 0 },
         blemishControl: { before: 0, current: 0 }
       },
-      beforePhoto: '',
-      afterPhoto: '',
       sessions: [],
       source: 'Registro Web'
     });

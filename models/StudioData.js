@@ -47,6 +47,22 @@ const PatientSchema = new mongoose.Schema({
   beforePhoto: { type: String, default: '' },
   afterPhoto: { type: String, default: '' },
   sessions: { type: [SessionSchema], default: [] },
+  // Seguimiento: evaluaciones fechadas de los indicadores de la piel (0-100)
+  progressLog: {
+    type: [{
+      _id: false,
+      id: String,
+      date: String,
+      specialistName: String,
+      hydration: Number,
+      toneUniformity: Number,
+      texturePores: Number,
+      blemishControl: Number,
+      notes: String
+    }],
+    default: []
+  },
+  treatmentPlan: { type: String, default: '' },
   source: { type: String, default: 'Estudio' }
 }, { timestamps: true });
 

@@ -92,10 +92,9 @@ const I18N = {
     waProof: 'Hola, soy {name}. Reservé *{treatment}* para el *{date} a las {time}*{deposit}. ¡Gracias!',
     waProofDeposit: ' y te envío el comprobante del depósito de *{amount}*',
     myFile: 'Mi ficha', skinType: 'Biotipo de piel', wantToImprove: 'Lo que quiero mejorar', allergiesLabel: 'Alergias',
-    myEvolution: 'Mi evolución', before: 'Antes', now: 'Ahora', currentPhoto: 'Foto actual', initialPhoto: 'Foto inicial', compare: 'Comparar antes y después',
-    myProgress: 'Mi progreso', hydration: 'Hidratación', toneUniformity: 'Uniformidad del tono', texturePores: 'Textura y poros', blemishControl: 'Control de imperfecciones',
+    myProgress: 'Mi progreso', lastEvaluation: 'Última evaluación: {date} ({count} en total)', hydration: 'Hidratación', toneUniformity: 'Uniformidad del tono', texturePores: 'Textura y poros', blemishControl: 'Control de imperfecciones',
     routine: 'Mi rutina en casa', morning: '☀️ Mañana', night: '🌙 Noche', sessions: 'Mis sesiones', actives: 'Activos: {value}',
-    noSessions: 'Después de tu primera evaluación verás aquí tu rutina, tus fotos y tu progreso.',
+    noSessions: 'Después de tu primera evaluación verás aquí tu rutina y tu progreso.',
     status: { 'Confirmada': 'Confirmada', 'Pendiente Depósito': 'Pendiente de depósito', 'Completada': 'Completada', 'Cancelada': 'Cancelada' }
   },
   en: {
@@ -148,10 +147,9 @@ const I18N = {
     waProof: 'Hi, this is {name}. I booked *{treatment}* for *{date} at {time}*{deposit}. Thank you!',
     waProofDeposit: ' and here is the receipt for the *{amount}* deposit',
     myFile: 'My profile', skinType: 'Skin type', wantToImprove: 'What I want to improve', allergiesLabel: 'Allergies',
-    myEvolution: 'My progress photos', before: 'Before', now: 'Now', currentPhoto: 'Current photo', initialPhoto: 'Initial photo', compare: 'Compare before and after',
-    myProgress: 'My progress', hydration: 'Hydration', toneUniformity: 'Even skin tone', texturePores: 'Texture and pores', blemishControl: 'Blemish control',
+    myProgress: 'My progress', lastEvaluation: 'Last assessment: {date} ({count} in total)', hydration: 'Hydration', toneUniformity: 'Even skin tone', texturePores: 'Texture and pores', blemishControl: 'Blemish control',
     routine: 'My home routine', morning: '☀️ Morning', night: '🌙 Night', sessions: 'My sessions', actives: 'Actives: {value}',
-    noSessions: 'After your first assessment you will see your routine, photos and progress here.',
+    noSessions: 'After your first assessment you will see your routine and progress here.',
     status: { 'Confirmada': 'Confirmed', 'Pendiente Depósito': 'Pending deposit', 'Completada': 'Completed', 'Cancelada': 'Cancelled' }
   }
 };
@@ -555,7 +553,6 @@ function renderClientPanel() {
   else if (cp.tab === 'skin') html = renderSkinTab();
   else html = renderBookingTab();
   panel.innerHTML = renderClientPushCard() + html;
-  if (cp.tab === 'skin') initPhotoSlider();
   if (cp.tab === 'book') {
     const selected = panel.querySelector('.cp-date.selected');
     if (selected) selected.parentElement.scrollLeft = selected.offsetLeft - selected.parentElement.offsetLeft - 16;
@@ -930,7 +927,8 @@ function renderSkinTab() {
     blemishControl: t('blemishControl')
   };
   const metrics = Object.entries(p.metrics || {}).filter(([, m]) => m && (m.before || m.current));
-  const hasPhotos = p.beforePhoto && p.afterPhoto;
+  const evaluations = (p.progressLog || []).filter(e => e.date).sort((a, b) => a.date.localeCompare(b.date));
+  const lastEval = evaluations[evaluations.length - 1];
 
   return `
     <section class="cp-card cp-skin-profile">
@@ -942,23 +940,10 @@ function renderSkinTab() {
       </ul>
     </section>
 
-    ${hasPhotos ? `
-      <section class="cp-step">
-        <h2>${esc(t('myEvolution'))}</h2>
-        <div class="ba-slider-container" id="cpBaSlider">
-          <span class="ba-label ba-label-before">${esc(t('before'))}</span>
-          <span class="ba-label ba-label-after">${esc(t('now'))}</span>
-          <div class="ba-img-layer"><img src="${esc(p.afterPhoto)}" alt="${esc(t('currentPhoto'))}"></div>
-          <div class="ba-before-clip"><img src="${esc(p.beforePhoto)}" alt="${esc(t('initialPhoto'))}"></div>
-          <div class="ba-handle">↔</div>
-          <input type="range" class="ba-range-input" min="0" max="100" value="50" aria-label="${esc(t('compare'))}">
-        </div>
-      </section>
-    ` : ''}
-
     ${metrics.length ? `
       <section class="cp-card">
         <h2>${esc(t('myProgress'))}</h2>
+        ${lastEval ? `<p class="cp-muted" style="margin:-6px 0 10px;">${esc(t('lastEvaluation', { date: formatLongDate(lastEval.date), count: evaluations.length }))}</p>` : ''}
         <div class="metrics-progress-list">
           ${metrics.map(([key, m]) => `
             <div class="metric-item">
@@ -1002,23 +987,6 @@ function renderSkinTab() {
       `}
     </section>
   `;
-}
-
-function initPhotoSlider() {
-  const slider = document.getElementById('cpBaSlider');
-  if (!slider) return;
-  const range = slider.querySelector('.ba-range-input');
-  const clip = slider.querySelector('.ba-before-clip');
-  const handle = slider.querySelector('.ba-handle');
-  const clipImg = clip.querySelector('img');
-  const update = () => {
-    clip.style.width = `${range.value}%`;
-    handle.style.left = `${range.value}%`;
-    clipImg.style.width = `${slider.offsetWidth}px`;
-  };
-  range.addEventListener('input', update);
-  window.addEventListener('resize', update);
-  update();
 }
 
 // ---------------------------------------------------------------------------

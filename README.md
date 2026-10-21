@@ -75,6 +75,8 @@ En **Configuración** (administradoras y cosmetólogas):
 - **Horario laboral:** días que abre y hora de apertura/cierre de cada día, cada cuántos minutos se ofrece una hora y la anticipación mínima. Cada cita bloquea la duración de su tratamiento, así no se cruzan reservas de la misma especialista.
 - **Reservas en línea y recordatorios:** pausar reservas, hasta cuántos días antes se reserva, citas activas por clienta y recordatorios push.
 
+**Expedientes:** cada ficha permite **editar los datos** de la paciente (contacto, edad, biotipo, fototipo, motivo y alergias), registrar **evaluaciones** de 4 indicadores de la piel (0–100) con fecha y observaciones, ver la **tendencia** de cada indicador desde la primera evaluación, escribir el **plan de tratamiento**, editar la rutina en casa, **editar o eliminar sesiones** y ver sus citas. La app ya no guarda fotos (para no llenar MongoDB); las que existían quedan en la base de datos sin mostrarse.
+
 **Calendario:** en el Panel Principal, tocar un día abre la lista de citas de ese día (con WhatsApp, confirmar, cobrar y ver expediente) y el botón para agendar en esa fecha. Los días cerrados aparecen rayados.
 
 **Horarios ocupados:** en la página de clientas y en la vista previa del portal, las horas que ya tienen cita se muestran tachadas y no se pueden elegir. En "Nueva cita" del panel aparecen como "ocupado".

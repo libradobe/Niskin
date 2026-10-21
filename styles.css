@@ -1669,6 +1669,276 @@ select.form-control,
   max-width: 170px;
 }
 
+/* Expedientes: ficha y seguimiento */
+.patient-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.patient-name {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.patient-name span {
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+}
+
+.patient-contact {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.patient-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.patient-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.patient-stats > div {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.patient-stats span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.patient-stats strong {
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.allergy-alert {
+  font-size: 0.84rem;
+  background: var(--status-danger-bg);
+  color: var(--status-danger-text);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.section-head h3 {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+}
+
+.subsection-title {
+  font-size: 0.86rem;
+  margin: 18px 0 10px;
+  color: var(--text-secondary);
+}
+
+.progress-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.progress-metric {
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-metric-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.progress-delta {
+  font-size: 0.74rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.progress-delta.up {
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+}
+
+.progress-delta.down {
+  background: var(--status-danger-bg);
+  color: var(--status-danger-text);
+}
+
+.progress-metric-values {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.progress-metric-values strong {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.progress-metric-values span {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.sparkline {
+  width: 100%;
+  height: 34px;
+}
+
+.progress-empty {
+  border: 1px dashed var(--gold-border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.eval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eval-item {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.eval-date {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.eval-body {
+  min-width: 0;
+}
+
+.eval-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.eval-body p {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.eval-body .eval-by {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.eval-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.eval-slider label {
+  display: flex;
+  justify-content: space-between;
+}
+
+.eval-slider output {
+  font-weight: 700;
+  color: var(--gold-hover);
+}
+
+.eval-slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold-primary);
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.session-date {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gold-hover);
+  white-space: nowrap;
+}
+
+.patient-appts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.patient-appt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.patient-appt strong {
+  font-size: 0.86rem;
+}
+
+.patient-appt p {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 /* Catálogo de tratamientos */
 .treatment-grid {
   display: grid;
@@ -2208,6 +2478,18 @@ textarea.form-control {
   }
   .settings-weekday {
     grid-template-columns: 1fr;
+  }
+  .patient-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .progress-metrics {
+    grid-template-columns: 1fr;
+  }
+  .eval-item {
+    grid-template-columns: 1fr auto;
+  }
+  .eval-date {
+    grid-column: 1 / -1;
   }
   .settings-card {
     padding: 18px 14px;
