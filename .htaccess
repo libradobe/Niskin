@@ -21,17 +21,26 @@ Options -Indexes
 # Manifiestos de la app instalable (notificaciones en iPhone requieren instalarla)
 AddType application/manifest+json .webmanifest
 
-# Evitar que el navegador o la CDN de Hostinger muestren versiones viejas de la app.
-# El HTML siempre se revalida; CSS/JS llevan ?v=... en index.html, panel.html y clientes.html.
+# Caché pensada para móviles:
+# - HTML: siempre se revalida (así los cambios se ven al instante).
+# - CSS/JS: llevan ?v=... en las páginas, se guardan 1 año sin volver a descargarse.
+# - config.js y sw.js: siempre se revalidan (configuración y service worker).
+# - Íconos e imágenes: 30 días.
 <IfModule mod_headers.c>
   <FilesMatch "\.(html|htm)$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
   <FilesMatch "\.(css|js)$">
-    Header set Cache-Control "public, max-age=3600, must-revalidate"
+    Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
   <FilesMatch "^(config|sw)\.js$">
     Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(png|svg|ico|webp|jpg|jpeg)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+  <FilesMatch "\.webmanifest$">
+    Header set Cache-Control "public, max-age=86400"
   </FilesMatch>
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
@@ -51,5 +60,5 @@ AddType application/manifest+json .webmanifest
 
 # Compresión GZIP para carga ultrarrápida en móviles
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json image/svg+xml
+  AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript text/javascript application/json application/manifest+json image/svg+xml
 </IfModule>

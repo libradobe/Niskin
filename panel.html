@@ -12,14 +12,18 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Niskin">
   <link rel="manifest" href="manifest-panel.webmanifest">
-  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <title>Panel del Estudio — Niskin Beauty Studio</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261026c">
+  <link rel="preconnect" href="https://niskin.onrender.com" crossorigin>
+  <!-- Fuentes sin bloquear el primer dibujo de la página -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap"></noscript>
+  <link rel="stylesheet" href="core.css?v=20261026e">
+  <link rel="stylesheet" href="styles.css?v=20261026e">
 </head>
 <body>
   <div class="app-layout">
@@ -27,7 +31,7 @@
     <aside class="sidebar" id="appSidebar">
       <div>
         <div class="brand-box" onclick="switchView('dashboard')" title="Ir al Panel Principal">
-          <img src="assets/logo.svg" alt="Niskin Beauty Studio Logo" class="brand-logo">
+          <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="brand-logo" width="185" height="68">
         </div>
 
         <ul class="nav-list">
@@ -189,7 +193,7 @@
   <!-- ACCESO AL PANEL (los datos del estudio solo se cargan con contraseña) -->
   <div id="adminGate" class="admin-gate" role="dialog" aria-modal="true" aria-labelledby="adminGateTitle">
     <form class="admin-gate-card" onsubmit="submitAdminLogin(event)">
-      <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="admin-gate-logo">
+      <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="admin-gate-logo" width="170" height="62">
       <h1 id="adminGateTitle">Panel del Estudio</h1>
       <p class="admin-gate-sub">Acceso exclusivo para el equipo de Niskin Beauty Studio.</p>
       <div class="form-group">
@@ -224,11 +228,12 @@
   <!-- CONTENEDOR DE NOTIFICACIONES TOAST -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="theme-guard.js?v=20261026c"></script>
-  <script src="config.js?v=20261026c"></script>
-  <script src="notificaciones.js?v=20261026c"></script>
-  <script src="facemap.js?v=20261026c"></script>
-  <script src="data.js?v=20261026c"></script>
-  <script src="app.js?v=20261026c"></script>
+  <script src="theme-guard.js?v=20261026e" defer></script>
+  <script src="config.js?v=20261026e" defer></script>
+  <script src="notificaciones.js?v=20261026e" defer></script>
+  <script src="facemap.js?v=20261026e" defer></script>
+  <script src="data.js?v=20261026e" defer></script>
+  <script src="app.js?v=20261026e" defer></script>
+  <script src="install.js?v=20261026e" defer></script>
 </body>
 </html>

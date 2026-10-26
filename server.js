@@ -60,8 +60,8 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Servir solo los archivos públicos del frontend (nunca server.js, modelos ni configuración)
 const PUBLIC_FILES = [
-  'index.html', 'panel.html', 'clientes.html', 'styles.css', 'clientes.css', 'landing.css', 'app.js', 'clientes.js', 'landing.js', 'data.js',
-  'config.js', 'theme-guard.js', 'notificaciones.js', 'facemap.js', 'sw.js', 'manifest-panel.webmanifest', 'manifest-clientes.webmanifest'
+  'index.html', 'panel.html', 'clientes.html', 'offline.html', 'core.css', 'styles.css', 'clientes.css', 'landing.css', 'app.js', 'clientes.js', 'landing.js', 'data.js',
+  'config.js', 'theme-guard.js', 'notificaciones.js', 'install.js', 'facemap.js', 'sw.js', 'manifest-panel.webmanifest', 'manifest-clientes.webmanifest'
 ];
 PUBLIC_FILES.forEach(file => {
   app.get(`/${file}`, (req, res) => res.sendFile(path.join(__dirname, file)));
@@ -762,7 +762,8 @@ async function notifyStateChanges(prevAppointments, appointments, prevInventory,
       title: 'Stock bajo en inventario',
       body: newlyLow.map(i => `${i.name}: quedan ${i.stock} ${i.unit || ''}`.trim()).join(' • '),
       tag: 'stock-bajo',
-      url: './panel.html?vista=inventario'
+      url: './panel.html?vista=inventario',
+      urgency: 'normal'
     });
   }
 }
@@ -1093,7 +1094,8 @@ app.post('/api/client/register', authLimiter, requireMongo, async (req, res) => 
       title: 'Nueva clienta registrada',
       body: `${patient.name} creó su cuenta desde la página de reservas.`,
       tag: `registro-${patient.id}`,
-      url: './panel.html?vista=expedientes'
+      url: './panel.html?vista=expedientes',
+      urgency: 'normal'
     });
   } catch (error) {
     console.error('Error registrando clienta:', error);

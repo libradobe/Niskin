@@ -80,6 +80,57 @@
     return true;
   }
 
+  // Si el permiso ya está dado, vuelve a registrar la suscripción en el servidor.
+  // Así se recupera sola si el navegador la renovó o si el servidor la borró.
+  async function sync({ apiBase, subscribePath, headers }) {
+    try {
+      if (!isSupported() || Notification.permission !== 'granted' || !apiBase) return false;
+      if (isIOS() && !isStandalone()) return false;
+      const reg = await getRegistration();
+      if (!reg) return false;
+      await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const keyRes = await fetch(`${apiBase}/api/push/public-key`, { cache: 'no-store' });
+        const keyData = await keyRes.json().catch(() => ({}));
+        if (!keyRes.ok || !keyData.publicKey) return false;
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyData.publicKey) });
+      }
+      const res = await fetch(`${apiBase}${subscribePath}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ subscription: sub.toJSON() })
+      });
+      return res.ok;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // Avisos que llegan mientras la app está abierta: la página recarga sus datos
+  const pushListeners = [];
+  function onPush(callback) {
+    pushListeners.push(callback);
+  }
+
+  function clearBadge() {
+    if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'niskin-clear-badge' });
+    }
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', event => {
+      if (!event.data || event.data.type !== 'niskin-push') return;
+      pushListeners.forEach(cb => { try { cb(event.data); } catch (e) {} });
+      if (document.visibilityState === 'visible') clearBadge();
+    });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') clearBadge();
+  });
+
   async function disable({ apiBase }) {
     const sub = await currentSubscription();
     if (!sub) return;
@@ -92,11 +143,14 @@
     }).catch(() => {});
   }
 
-  window.NiskinPush = { isIOS, isStandalone, isSupported, getRegistration, currentSubscription, status, enable, disable };
+  window.NiskinPush = { isIOS, isStandalone, isSupported, getRegistration, currentSubscription, status, enable, disable, sync, onPush, clearBadge };
 
   // Registrar el service worker temprano para que esté listo cuando la usuaria active las notificaciones
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => getRegistration());
+    window.addEventListener('load', () => {
+      getRegistration();
+      clearBadge();
+    });
   }
 })();
 

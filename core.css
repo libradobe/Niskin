@@ -1,0 +1,273 @@
+/* ==========================================================================
+   CORE — colores (paleta Marfil), base, botones y etiquetas.
+   Lo cargan todas las páginas; la página de inicio solo necesita este archivo
+   más landing.css, así descarga mucho menos en el teléfono.
+   ========================================================================== */
+:root {
+  /* Tema claro fijo: evita que el modo oscuro del sistema/navegador cambie los colores */
+  color-scheme: only light;
+
+  /* Paleta "Minimal 01 · Marfil esencial" (marfil, tinta cálida y dorado) */
+  --bg-canvas: #F7F5F0;
+  --bg-sidebar: #FBFAF7;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #F6F3ED;
+  --bg-subtle-hover: #EEE9E1;
+  --bg-selected: #F5F1E9;
+
+  --gold-primary: #B18B4A;
+  --gold-hover: #977538;
+  --gold-light: #DFCDA8;
+  --gold-soft: #F8F3EA;
+  --gold-border: #D6C39D;
+
+  --text-primary: #37332F;
+  --text-secondary: #777168;
+  --text-muted: #A39A8F;
+
+  /* Status & Pastel Accents from Wireframe 1 */
+  --pastel-rose: #E5D4CE;
+  --pastel-rose-text: #8A5A4C;
+  --pastel-sage: #D6E1D8;
+  --pastel-sage-text: #476C4F;
+  --pastel-lavender: #DFD8E8;
+  --pastel-lavender-text: #65537D;
+  --pastel-amber: #F5E8D3;
+  --pastel-amber-text: #9C6D27;
+  --pastel-blue: #D7E1E8;
+  --pastel-blue-text: #49667A;
+
+  --status-success-bg: #EEF3EE;
+  --status-success-dot: #739076;
+  --status-success-text: #5E7A62;
+
+  --status-warning-bg: #F8F1E4;
+  --status-warning-dot: #B58A45;
+  --status-warning-text: #8F6A31;
+
+  --status-danger-bg: #F9E9E8;
+  --status-danger-dot: #C95B54;
+  --status-danger-text: #943B35;
+
+  --border-light: #ECE8E1;
+  --border-card: #E9E4DC;
+
+  --shadow-sm: 0 4px 14px rgba(81, 70, 56, 0.05);
+  --shadow-md: 0 10px 28px rgba(81, 70, 56, 0.08);
+  --shadow-lg: 0 18px 42px rgba(81, 70, 56, 0.13);
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Samsung Internet y otros navegadores no aplican su "modo oscuro forzado" cuando la página
+   declara su propio tema con prefers-color-scheme. Aquí el tema oscuro reutiliza los mismos
+   colores claros, así la app se ve igual con el modo oscuro del teléfono activado. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: only light;
+    --bg-canvas: #F7F5F0;
+    --bg-sidebar: #FBFAF7;
+    --bg-surface: #FFFFFF;
+    --text-primary: #37332F;
+    --text-secondary: #777168;
+  }
+  html,
+  body {
+    background-color: #F7F5F0;
+    color: #37332F;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: only light;
+  background-color: #F7F5F0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.btn-gold {
+  background: var(--gold-primary);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 12px;
+  padding: 11px 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(177, 139, 74, 0.25);
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.btn-gold:hover {
+  background: var(--gold-hover);
+  transform: translateY(-1px);
+}
+
+.btn-soft {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.btn-soft:hover {
+  background: var(--bg-subtle-hover);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  border-radius: 8px;
+}
+
+.skin-tag {
+  background: #FFFFFF;
+  border: 1px solid var(--gold-border);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: var(--radius-pill);
+}
+
+.btn-block {
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-gold:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none;
+}
+
+.dark-notice {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 300;
+  max-width: 460px;
+  margin: 0 auto;
+  background: #FFFFFF;
+  color: #37332F;
+  border: 1px solid #D6C39D;
+  border-radius: 18px;
+  box-shadow: 0 18px 42px rgba(81, 70, 56, 0.25);
+  padding: 16px 18px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dark-notice strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.dark-notice ol {
+  margin: 8px 0 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dark-notice button {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  background: #B18B4A;
+  color: #FFFFFF;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+/* Aviso para instalar la app (install.js) */
+.ni-install {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--ni-offset, 0px) + 12px + env(safe-area-inset-bottom));
+  z-index: 120;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 14px 40px 14px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--gold-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity .25s ease, transform .25s ease;
+}
+.ni-install.visible { opacity: 1; transform: translateY(0); }
+.ni-install-icon { flex: none; width: 48px; height: 48px; border-radius: 12px; box-shadow: 0 0 0 1px var(--border-light); }
+.ni-install-copy { min-width: 0; }
+.ni-install-copy strong { display: block; font-size: .95rem; color: var(--text-primary); }
+.ni-install-copy p { margin: 4px 0 10px; font-size: .84rem; line-height: 1.45; color: var(--text-secondary); }
+.ni-install-copy .ni-share { vertical-align: -3px; color: #2F7BF6; }
+.ni-install-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ni-install-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+/* Por encima del botón fijo de reserva (inicio) y de las pestañas (clientas) */
+@media (max-width: 719px) { .landing-page .ni-install { --ni-offset: 64px; } }
+.cp-has-tabbar .ni-install { --ni-offset: 66px; }
+@media (min-width: 960px) { .cp-has-tabbar .ni-install { --ni-offset: 90px; } }
+@media (prefers-reduced-motion: reduce) { .ni-install { transition: none; } }

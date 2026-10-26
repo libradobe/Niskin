@@ -12,20 +12,27 @@
   <meta property="og:title" content="Niskin Beauty Studio — Reserva tu cita">
   <meta property="og:description" content="Tratamientos faciales personalizados y seguimiento de tu piel. Reserva en línea en minutos.">
   <meta property="og:image" content="assets/icon-512.png">
-  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48.png">
+  <link rel="manifest" href="manifest-clientes.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Niskin">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261026c">
-  <link rel="stylesheet" href="landing.css?v=20261026c">
+  <link rel="preconnect" href="https://niskin.onrender.com" crossorigin>
+  <!-- Fuentes sin bloquear el primer dibujo de la página -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap"></noscript>
+  <link rel="stylesheet" href="core.css?v=20261026e">
+  <link rel="stylesheet" href="landing.css?v=20261026e">
 </head>
 <body class="landing-page">
   <a class="lp-skip" href="#contenido" data-i18n="skip">Saltar al contenido</a>
 
   <header class="lp-header">
     <a href="./" class="lp-brand" aria-label="Niskin Beauty Studio — inicio">
-      <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="lp-logo">
+      <img src="assets/logo.svg" alt="Niskin Beauty Studio" class="lp-logo" width="110" height="40">
     </a>
     <nav class="lp-nav" aria-label="Secciones">
       <a href="#tratamientos" data-i18n="navTreatments">Tratamientos</a>
@@ -184,8 +191,9 @@
   <!-- Botón fijo de reserva en móvil -->
   <a class="lp-sticky-cta btn-gold" href="clientes.html?origen=landing-sticky" data-cta="sticky" data-i18n="ctaBook">Reservar una cita</a>
 
-  <script src="theme-guard.js?v=20261026c"></script>
-  <script src="config.js?v=20261026c"></script>
-  <script src="landing.js?v=20261026c"></script>
+  <script src="theme-guard.js?v=20261026e" defer></script>
+  <script src="config.js?v=20261026e" defer></script>
+  <script src="landing.js?v=20261026e" defer></script>
+  <script src="install.js?v=20261026e" defer></script>
 </body>
 </html>

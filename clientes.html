@@ -11,18 +11,22 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Niskin">
   <link rel="manifest" href="manifest-clientes.webmanifest">
-  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <title>Agenda tu cita — Niskin Beauty Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261026c">
-  <link rel="stylesheet" href="clientes.css?v=20261026c">
+  <link rel="preconnect" href="https://niskin.onrender.com" crossorigin>
+  <!-- Fuentes sin bloquear el primer dibujo de la página -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap"></noscript>
+  <link rel="stylesheet" href="core.css?v=20261026e">
+  <link rel="stylesheet" href="styles.css?v=20261026e">
+  <link rel="stylesheet" href="clientes.css?v=20261026e">
 </head>
 <body class="client-page">
   <header class="cp-header">
-    <a href="./" class="cp-logo-link" aria-label="Ir al inicio"><img src="assets/logo.svg" alt="Niskin Beauty Studio" class="cp-logo"></a>
+    <a href="./" class="cp-logo-link" aria-label="Ir al inicio"><img src="assets/logo.svg" alt="Niskin Beauty Studio" class="cp-logo" width="110" height="40"></a>
     <button id="cpLogoutBtn" class="cp-icon-btn" onclick="clientLogout()" data-i18n-title="logout" data-i18n-aria="logout" title="Cerrar sesión" aria-label="Cerrar sesión" hidden>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     </button>
@@ -143,10 +147,11 @@
 
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="theme-guard.js?v=20261026c"></script>
-  <script src="config.js?v=20261026c"></script>
-  <script src="notificaciones.js?v=20261026c"></script>
-  <script src="facemap.js?v=20261026c"></script>
-  <script src="clientes.js?v=20261026c"></script>
+  <script src="theme-guard.js?v=20261026e" defer></script>
+  <script src="config.js?v=20261026e" defer></script>
+  <script src="notificaciones.js?v=20261026e" defer></script>
+  <script src="facemap.js?v=20261026e" defer></script>
+  <script src="clientes.js?v=20261026e" defer></script>
+  <script src="install.js?v=20261026e" defer></script>
 </body>
 </html>

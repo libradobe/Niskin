@@ -32,7 +32,7 @@ El repositorio contiene el servidor (`server.js`, `auth.js`), los modelos de Mon
 
 ## 2. Subir el Frontend a Hostinger (`public_html`)
 
-El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estáticos: `index.html` (inicio), `panel.html`, `clientes.html`, estilos (`styles.css`, `clientes.css`, `landing.css`), scripts (`app.js`, `clientes.js`, `landing.js`, `facemap.js`, `notificaciones.js`, `theme-guard.js`, `config.js`, `data.js`), el service worker `sw.js`, los manifiestos `.webmanifest`, la carpeta `assets/` (logo e íconos) y `.htaccess`.
+El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estáticos: `index.html` (inicio), `panel.html`, `clientes.html`, estilos (`core.css`, `styles.css`, `clientes.css`, `landing.css`), scripts (`app.js`, `clientes.js`, `landing.js`, `facemap.js`, `notificaciones.js`, `install.js`, `theme-guard.js`, `config.js`, `data.js`), el service worker `sw.js`, la página sin conexión `offline.html`, los manifiestos `.webmanifest`, la carpeta `assets/` (logo e íconos) y `.htaccess`.
 
 > `.htaccess` es un archivo oculto. En el Administrador de archivos activa "Mostrar archivos ocultos" y confirma que se reemplazó; si no, la URL corta `/clientes` y el control de caché no funcionan.
 
@@ -43,7 +43,7 @@ El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estát
    window.NISKIN_RENDER_URL = 'https://tu-servicio.onrender.com';
    ```
    o desde **Configurar servidor** en la pantalla de acceso del panel.
-4. Si cambias archivos CSS/JS, sube el número `?v=...` en `index.html`, `panel.html` y `clientes.html` para que los teléfonos descarguen la versión nueva.
+4. **Importante:** los CSS/JS se guardan en el teléfono por 1 año para que la app abra rápido. Si cambias alguno, sube el número `?v=...` en `index.html`, `panel.html` y `clientes.html`; si no, los teléfonos seguirán usando la versión anterior.
 
 ## 3. Cuentas del equipo (administradoras y cosmetólogas)
 
@@ -115,6 +115,17 @@ En **Configuración** (administradoras y cosmetólogas):
 - **iPhone:** iOS solo permite notificaciones si la página se **añade a la pantalla de inicio** (Compartir → Añadir a inicio) y se abre desde ahí. La app lo explica en pantalla.
 - **Render gratuito:** el servidor se duerme tras unos minutos sin uso. Los avisos de reservas y cambios llegan igual (las acciones lo despiertan), pero los **recordatorios** solo se envían mientras está despierto. Para que sean puntuales, usa un monitor gratuito (por ejemplo UptimeRobot) que visite `https://TU-SERVICIO.onrender.com/api/health` cada 10 minutos, o un plan de pago de Render.
 - Al cerrar sesión, el dispositivo deja de recibir notificaciones de esa cuenta.
+- Si un aviso llega con la app abierta, la página recarga sus datos al momento. El ícono de la app muestra el número de avisos sin leer (Android, iPhone con la app instalada) y se limpia al abrirla.
+- Cada vez que se abre la app con el permiso dado, la suscripción se vuelve a registrar sola (si el navegador la renovó, no se pierden avisos).
+- Los avisos de citas se envían con prioridad alta para que lleguen aunque el móvil esté en ahorro de batería; si hay varios cambios de la misma cita sin entregar, solo llega el más reciente.
+
+## 6.1 Instalar la app en el móvil
+
+- En **Android / Samsung**, al entrar a la página aparece un aviso con el logo **«Instala Niskin en tu móvil»**; con **Instalar** queda un acceso directo en la pantalla de inicio que abre la app a pantalla completa.
+- En **iPhone**, el aviso explica: Compartir → **Añadir a pantalla de inicio** (Safari no permite instalar con un botón). Si se abre desde Instagram o Facebook, pide abrirla en Safari.
+- Si la persona toca **Ahora no**, el aviso no vuelve a salir por 7 días. No aparece si la app ya está instalada.
+- La página de inicio y la de clientas instalan la app de clientas; el panel instala **Niskin Panel** para el equipo.
+- Sin internet, la app muestra una pantalla con el logo y el botón **Reintentar** en vez del error del navegador.
 
 ## 7. Modo oscuro en Samsung Internet
 

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="only light">
+  <meta name="theme-color" content="#FBFAF7">
+  <title>Sin conexión — Niskin Beauty Studio</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #F7F5F0; color: #37332F; color-scheme: only light; }
+    body { display: grid; place-items: center; min-height: 100vh; padding: 24px; box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center; }
+    main { max-width: 340px; }
+    img { width: 180px; height: auto; margin-bottom: 24px; }
+    h1 { font-size: 1.25rem; margin: 0 0 8px; }
+    p { margin: 0 0 24px; color: #777168; line-height: 1.5; }
+    button { border: 0; border-radius: 12px; padding: 13px 22px; font: inherit; font-weight: 600; color: #fff; background: #B18B4A; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="assets/logo.svg" alt="Niskin Beauty Studio" width="180" height="66">
+    <h1 id="title">Sin conexión a internet</h1>
+    <p id="text">Revisa tu conexión y vuelve a intentarlo. Tus citas y datos siguen guardados.</p>
+    <button type="button" id="retry" onclick="location.reload()">Reintentar</button>
+  </main>
+  <script>
+    if (/^en\b/i.test(navigator.language || '')) {
+      document.documentElement.lang = 'en';
+      document.getElementById('title').textContent = 'No internet connection';
+      document.getElementById('text').textContent = 'Check your connection and try again. Your appointments and data are still saved.';
+      document.getElementById('retry').textContent = 'Try again';
+    }
+    window.addEventListener('online', () => location.reload());
+  </script>
+</body>
+</html>

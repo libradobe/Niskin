@@ -5262,7 +5262,14 @@ async function refreshPushStatus() {
   if (!window.NiskinPush) return;
   uiState.pushStatus = await NiskinPush.status();
   if (uiState.currentView === 'dashboard') renderWorkspace();
+  // Mantiene registrada la suscripción de este dispositivo aunque el navegador la renueve
+  if (getAdminToken()) {
+    NiskinPush.sync({ apiBase: getRenderBaseUrl(), subscribePath: '/api/admin/push/subscribe', headers: authHeaders() });
+  }
 }
+
+// Un aviso nuevo (cita, cancelación…) con el panel abierto: se traen los datos al momento
+if (window.NiskinPush) NiskinPush.onPush(() => syncFromCloudServer());
 
 // Trae citas nuevas de clientas al volver a la pestaña y cada 2 minutos
 document.addEventListener('visibilitychange', () => {

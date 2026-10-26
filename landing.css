@@ -649,3 +649,12 @@
     transition: none;
   }
 }
+
+/* Las secciones fuera de la primera pantalla se dibujan solo al acercarse (más rápido en móvil) */
+.lp-how,
+#equipo,
+.lp-contact,
+.lp-final {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 640px;
+}

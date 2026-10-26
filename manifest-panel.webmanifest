@@ -1,15 +1,20 @@
 {
+  "id": "./panel.html",
   "name": "Niskin — Panel del Estudio",
   "short_name": "Niskin Panel",
+  "description": "Agenda, pacientes, ventas e inventario de Niskin Beauty Studio.",
   "start_url": "./panel.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F7F5F0",
+  "orientation": "portrait",
+  "background_color": "#FAF6EE",
   "theme_color": "#FBFAF7",
   "lang": "es",
+  "categories": ["business", "productivity"],
   "icons": [
-    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

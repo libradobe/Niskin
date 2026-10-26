@@ -488,12 +488,46 @@ async function loadClientData() {
     applyStudioBranding();
     showAppView();
     cp.pushStatus = window.NiskinPush ? await NiskinPush.status() : 'unsupported';
+    cp.loadedAt = Date.now();
     renderClientPanel();
     refreshAvailability();
+    syncClientPush();
   } finally {
     setLoading(false);
   }
 }
+
+// Recarga citas y expediente sin pantalla de carga (al llegar un aviso o volver a la app)
+async function refreshClientDataQuietly() {
+  if (!storageGet(CLIENT_TOKEN_KEY) || !cp.data || cp.refreshing) return;
+  cp.refreshing = true;
+  try {
+    const data = await api('/api/client/me');
+    cp.data = data;
+    cp.loadedAt = Date.now();
+    // En la pestaña de agendar solo se actualizan los horarios, para no perder lo que está eligiendo
+    if (cp.tab === 'book') refreshAvailability();
+    else renderClientPanel();
+  } catch (err) {
+    // Sin conexión o sesión vencida: se mantiene lo que ya se ve
+  } finally {
+    cp.refreshing = false;
+  }
+}
+
+function syncClientPush() {
+  if (!window.NiskinPush || !storageGet(CLIENT_TOKEN_KEY)) return;
+  NiskinPush.sync({
+    apiBase: getApiBase(),
+    subscribePath: '/api/client/push/subscribe',
+    headers: { Authorization: `Bearer ${storageGet(CLIENT_TOKEN_KEY)}` }
+  });
+}
+
+if (window.NiskinPush) NiskinPush.onPush(() => refreshClientDataQuietly());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - (cp.loadedAt || 0) > 60000) refreshClientDataQuietly();
+});
 
 function getBookableDates(count = 28) {
   if (!cp.data) return [];

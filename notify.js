@@ -4,6 +4,7 @@
 // se generan una sola vez y se guardan en MongoDB para que las suscripciones
 // sigan funcionando después de cada reinicio de Render.
 // ============================================================================
+const crypto = require('crypto');
 const webpush = require('web-push');
 const { PushSubscription, AppSecret, StaffAccount } = require('./models/StudioData');
 
@@ -64,13 +65,26 @@ async function removeSubscriptionsOf(ownerType, ownerId) {
   await PushSubscription.deleteMany({ ownerType, ownerId });
 }
 
+// "topic" hace que el servicio push reemplace un aviso aún no entregado de la misma cita
+// en vez de acumularlos (máx. 32 caracteres del alfabeto base64url).
+function pushTopic(tag) {
+  if (!tag) return undefined;
+  const clean = String(tag).replace(/[^A-Za-z0-9_-]/g, '');
+  return clean.length && clean.length <= 32
+    ? clean
+    : crypto.createHash('sha256').update(String(tag)).digest('base64url').slice(0, 32);
+}
+
 async function sendToOwners(ownerType, ownerIds, payload) {
   if (!publicKey || !ownerIds.length) return;
   const subs = await PushSubscription.find({ ownerType, ownerId: { $in: ownerIds } }).lean();
-  const body = JSON.stringify(payload);
+  const { urgency = 'high', ...message } = payload;
+  const body = JSON.stringify({ timestamp: Date.now(), ...message });
+  // Urgencia alta: los móviles en ahorro de batería entregan el aviso de inmediato
+  const options = { TTL: 24 * 60 * 60, urgency, topic: pushTopic(message.tag) };
   await Promise.all(subs.map(async sub => {
     try {
-      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, { TTL: 24 * 60 * 60 });
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, options);
     } catch (err) {
       // 404/410: la suscripción ya no existe (la usuaria desinstaló o revocó el permiso)
       if (err.statusCode === 404 || err.statusCode === 410) {
