@@ -10,6 +10,7 @@ const {
   Appointment,
   Inventory,
   Finance,
+  Sale,
   Treatment,
   Specialist,
   ClientAccount,
@@ -219,12 +220,23 @@ function cleanMultiline(value, maxLength = 600) {
 // ============================================================================
 let settingsCache = null;
 
+let settingsLoading = null;
+
 async function getSettings() {
   if (settingsCache) return settingsCache;
-  let doc = await StudioSettings.findOne({ id: 'studio' }).lean();
-  if (!doc) {
-    doc = (await StudioSettings.create({ id: 'studio', weeklySchedule: sched.DEFAULT_WEEKLY_SCHEDULE })).toObject();
-  } else if (!Array.isArray(doc.weeklySchedule) || doc.weeklySchedule.length !== 7) {
+  // Una sola carga a la vez: evita crear la configuración dos veces si llegan peticiones simultáneas
+  if (!settingsLoading) settingsLoading = loadSettings().finally(() => { settingsLoading = null; });
+  return settingsLoading;
+}
+
+async function loadSettings() {
+  // Crear el documento de forma atómica si aún no existe
+  let doc = await StudioSettings.findOneAndUpdate(
+    { id: 'studio' },
+    { $setOnInsert: { id: 'studio', weeklySchedule: sched.DEFAULT_WEEKLY_SCHEDULE } },
+    { upsert: true, new: true }
+  ).lean();
+  if (!Array.isArray(doc.weeklySchedule) || doc.weeklySchedule.length !== 7) {
     // Migración: la configuración anterior usaba una lista de horas fijas y días cerrados
     const weeklySchedule = sched.legacyToWeekly(doc);
     doc = await StudioSettings.findOneAndUpdate(
@@ -588,14 +600,15 @@ app.patch('/api/admin/staff/:id', requireAdmin, requireStaffManager, requireMong
 // Obtener todo el estado del estudio (solo administradora)
 app.get('/api/state', requireAdmin, requireMongo, async (req, res) => {
   try {
-    const [patients, appointments, inventory, finances, treatments, specialists] = await Promise.all([
+    const [patients, appointments, inventory, finances, treatments, specialists, sales] = await Promise.all([
       // Las fotos ya no se usan: no se envían (las que existan quedan intactas en la base de datos)
       Patient.find({}).select('-beforePhoto -afterPhoto').sort({ createdAt: -1 }).lean(),
       Appointment.find({}).sort({ date: 1, time: 1 }).lean(),
       Inventory.find({}).sort({ category: 1, name: 1 }).lean(),
       Finance.find({}).sort({ date: -1, createdAt: -1 }).lean(),
       Treatment.find({}).lean(),
-      Specialist.find({}).lean()
+      Specialist.find({}).lean(),
+      Sale.find({}).sort({ date: -1, createdAt: -1 }).lean()
     ]);
 
     const hasData =
@@ -621,7 +634,8 @@ app.get('/api/state', requireAdmin, requireMongo, async (req, res) => {
             inventory,
             finances,
             treatments,
-            specialists
+            specialists,
+            sales
           }
         : null
     });
@@ -644,7 +658,8 @@ app.post('/api/state', requireAdmin, requireMongo, async (req, res) => {
     ['inventory', Inventory],
     ['finances', Finance],
     ['treatments', Treatment],
-    ['specialists', Specialist]
+    ['specialists', Specialist],
+    ['sales', Sale]
   ];
 
   try {
@@ -765,6 +780,24 @@ async function markDeleted(collectionName, ids, staff) {
     }
   })));
 }
+
+// Anular una venta: borra la venta y su ingreso en Finanzas (el panel devuelve el stock)
+app.delete('/api/admin/sales/:id', requireAdmin, requireMongo, async (req, res) => {
+  try {
+    const sale = await Sale.findOne({ id: req.params.id }).lean();
+    if (!sale) return res.status(404).json({ status: 'error', message: 'No se encontró esa venta.' });
+    await Sale.deleteOne({ id: sale.id });
+    await markDeleted('sales', [sale.id], req.staff);
+    if (sale.financeId) {
+      await Finance.deleteOne({ id: sale.financeId });
+      await markDeleted('finances', [sale.financeId], req.staff);
+    }
+    res.json({ status: 'ok' });
+  } catch (error) {
+    console.error('Error anulando venta:', error);
+    res.status(500).json({ status: 'error', message: 'No se pudo anular la venta.' });
+  }
+});
 
 app.delete('/api/admin/appointments/:id', requireAdmin, requireMongo, async (req, res) => {
   try {
@@ -1342,6 +1375,11 @@ async function sendDueReminders() {
   }
 }
 setInterval(sendDueReminders, 10 * 60 * 1000);
+
+// Un error inesperado en tareas de fondo (notificaciones, recordatorios) no debe tumbar el servidor
+process.on('unhandledRejection', err => {
+  console.error('Error no controlado:', err && err.message ? err.message : err);
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Servidor Niskin Beauty Studio ejecutándose en el puerto ${PORT}`);

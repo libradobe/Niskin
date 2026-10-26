@@ -84,7 +84,13 @@ En **Configuración** (administradoras y cosmetólogas):
 
 **Productos por sesión e inventario:** al registrar una sesión o al "Cobrar y completar" una cita se eligen los productos usados (vienen precargados con los del tratamiento) y se descuentan del inventario; quedan anotados en la sesión.
 
-**Venta de productos:** "Registrar venta" en Inventario, "Vender productos" en el expediente o "Agregar productos vendidos" al cobrar una cita. Se eligen productos y cantidades, se descuenta el stock (no deja vender más de lo que hay), se registra el ingreso en Finanzas y la compra queda en el expediente de la clienta.
+**Ventas (menú lateral):** sección propia para el negocio de productos.
+- **Nueva venta:** se eligen la clienta (o "venta de mostrador"), los productos y las cantidades. No deja vender más de lo que hay en stock. Descuenta el inventario, registra el ingreso en Finanzas y, si hay clienta, la compra aparece en su expediente.
+- **Indicadores** por período (hoy, últimos 7 días, este mes, todo): total vendido, número de ventas, unidades y ticket promedio.
+- **Historial** con búsqueda (usa el buscador de arriba) y **Anular venta**: devuelve los productos al inventario y quita el ingreso de Finanzas y la compra del expediente.
+- **Más vendidos** del período y **stock de productos de venta** con alertas de stock bajo y botón "Vender".
+- También se puede vender desde el expediente ("Vender productos") o al "Cobrar y completar" una cita; todas aparecen en Ventas.
+- Las ventas se guardan en su propia colección de MongoDB (`sales`). Las ventas registradas antes de esta versión siguen en Finanzas.
 
 **Calendario:** en el Panel Principal, tocar un día abre la lista de citas de ese día (con WhatsApp, confirmar, cobrar y ver expediente) y el botón para agendar en esa fecha. Los días cerrados aparecen rayados.
 

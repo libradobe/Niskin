@@ -1484,6 +1484,7 @@ function switchView(viewName) {
     'dashboard': ['Panel General Niskin', 'Resumen ejecutivo de citas, ingresos, inventario y evolución de pacientes'],
     'agenda': ['Agenda y Citas', 'Control de reservas, confirmación de depósitos y atención en cabina'],
     'patients': ['Expedientes Clínicos', 'Ficha cosmetológica, seguimiento del progreso, plan de tratamiento, rutina y sesiones'],
+    'sales': ['Ventas', 'Venta de productos, historial, más vendidos y stock de venta'],
     'inventory': ['Inventario de Cabina y Skincare Retail', 'Control de existencias, alertas de stock mínimo y descuento automático por sesión'],
     'treatments': ['Catálogo de Tratamientos y Protocolos', 'Servicios de Niskin Beauty Studio e insumos vinculados por sesión'],
     'finances': ['Finanzas y Flujo de Caja', 'Registro de ingresos por tratamientos, depósitos, ventas de skincare y gastos operativos'],
@@ -1513,6 +1514,9 @@ function renderWorkspace() {
       break;
     case 'patients':
       container.innerHTML = renderPatientsView();
+      break;
+    case 'sales':
+      container.innerHTML = renderSalesView();
       break;
     case 'inventory':
       container.innerHTML = renderInventoryView();
@@ -2144,7 +2148,7 @@ function completeAppointmentSession(appointmentId) {
     ? applyProductUsage(pickerItems('done'))
     : applyProductUsage(treatment?.suppliesUsed || []);
   const sale = pickerItems('sold').length
-    ? recordProductSale({ patientId: app.patientId, rows: pickerItems('sold'), method, date: app.date })
+    ? recordProductSale({ patientId: app.patientId, rows: pickerItems('sold'), method, date: app.date, appointmentId: app.id })
     : null;
 
   const patient = state.patients.find(p => p.id === app.patientId);
@@ -3508,8 +3512,8 @@ function applyProductUsage(rows) {
   return used;
 }
 
-// Venta de productos: descuenta stock, registra el ingreso y la guarda en el expediente
-function recordProductSale({ patientId, rows, method, date }) {
+// Venta de productos: descuenta stock, registra el ingreso, la guarda en Ventas y en el expediente
+function recordProductSale({ patientId, rows, method, date, appointmentId = '' }) {
   const patient = patientId ? state.patients.find(p => p.id === patientId) : null;
   const items = rows.map(r => {
     const item = state.inventory.find(i => i.id === r.inventoryId);
@@ -3520,8 +3524,11 @@ function recordProductSale({ patientId, rows, method, date }) {
   const total = items.reduce((sum, i) => sum + i.qty * i.unitPrice, 0);
   if (!items.length || total <= 0) return null;
 
+  const stamp = Date.now();
+  const financeId = `fin-${stamp}-v`;
+  const purchaseId = patient ? `compra-${stamp}` : '';
   state.finances.unshift({
-    id: 'fin-' + Date.now() + '-v',
+    id: financeId,
     date,
     concept: `Venta de productos: ${items.map(i => `${i.name} x${i.qty}`).join(', ')}${patient ? ` — ${patient.name}` : ''}`,
     category: 'Venta Retail Skincare',
@@ -3531,9 +3538,27 @@ function recordProductSale({ patientId, rows, method, date }) {
   });
   if (patient) {
     patient.purchases = patient.purchases || [];
-    patient.purchases.unshift({ id: 'compra-' + Date.now(), date, items, total, method });
+    patient.purchases.unshift({ id: purchaseId, date, items, total, method });
   }
-  return { items, total };
+  const now = new Date();
+  const me = getCurrentStaff();
+  const sale = {
+    id: `venta-${stamp}`,
+    date,
+    time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+    patientId: patient ? patient.id : '',
+    patientName: patient ? patient.name : '',
+    items,
+    total,
+    method,
+    financeId,
+    purchaseId,
+    appointmentId,
+    createdBy: me?.isMaster ? 'Administración' : (me?.name || '')
+  };
+  state.sales = state.sales || [];
+  state.sales.unshift(sale);
+  return sale;
 }
 
 function saleStockProblem(prefix) {
@@ -3608,6 +3633,201 @@ function saveSale() {
   saveState();
   closeModal();
   showToast(`Venta registrada: ${formatMoney(result.total)}. Inventario actualizado.`);
+  renderWorkspace();
+}
+
+// ============================================================================
+// VISTA VENTAS
+// ============================================================================
+const SALES_PERIODS = [
+  ['hoy', 'Hoy'],
+  ['semana', 'Últimos 7 días'],
+  ['mes', 'Este mes'],
+  ['todo', 'Todo']
+];
+
+function salesInPeriod(period) {
+  const today = toISODate(new Date());
+  const weekAgo = toISODate(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
+  const month = today.slice(0, 7);
+  return (state.sales || []).filter(s => {
+    if (period === 'hoy') return s.date === today;
+    if (period === 'semana') return s.date >= weekAgo && s.date <= today;
+    if (period === 'mes') return String(s.date).startsWith(month);
+    return true;
+  });
+}
+
+function setSalesPeriod(period) {
+  uiState.salesPeriod = period;
+  renderWorkspace();
+}
+
+function renderSalesView() {
+  const period = uiState.salesPeriod || 'mes';
+  const q = (uiState.searchQuery || '').toLowerCase();
+  const inPeriod = salesInPeriod(period);
+  const list = (q
+    ? inPeriod.filter(s => `${s.patientName} ${s.items.map(i => i.name).join(' ')} ${s.method}`.toLowerCase().includes(q))
+    : inPeriod
+  ).sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+
+  const total = inPeriod.reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const units = inPeriod.reduce((sum, s) => sum + s.items.reduce((u, i) => u + Number(i.qty || 0), 0), 0);
+  const avg = inPeriod.length ? total / inPeriod.length : 0;
+
+  const byProduct = {};
+  inPeriod.forEach(s => s.items.forEach(i => {
+    const key = i.inventoryId || i.name;
+    byProduct[key] = byProduct[key] || { name: i.name, qty: 0, revenue: 0 };
+    byProduct[key].qty += Number(i.qty || 0);
+    byProduct[key].revenue += Number(i.qty || 0) * Number(i.unitPrice || 0);
+  }));
+  const top = Object.values(byProduct).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  const maxRevenue = top[0]?.revenue || 1;
+
+  const retail = state.inventory.filter(i => Number(i.salePrice) > 0).sort((a, b) => a.name.localeCompare(b.name));
+  const periodLabel = SALES_PERIODS.find(p => p[0] === period)?.[1] || '';
+
+  return `
+    <div class="action-bar">
+      <div class="sales-periods" role="tablist" aria-label="Período">
+        ${SALES_PERIODS.map(([key, label]) => `
+          <button class="btn-soft ${period === key ? 'is-active' : ''}" role="tab" aria-selected="${period === key}" onclick="setSalesPeriod('${key}')">${label}</button>
+        `).join('')}
+      </div>
+      <button class="btn-gold" onclick="openSaleModal()"><span>＋</span> Nueva venta</button>
+    </div>
+
+    <div class="sales-kpis">
+      <div class="kpi-card">
+        <div class="kpi-label">Vendido (${escapeHTML(periodLabel.toLowerCase())})</div>
+        <div class="kpi-value">${formatMoney(total)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Ventas</div>
+        <div class="kpi-value">${inPeriod.length}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Unidades vendidas</div>
+        <div class="kpi-value">${Math.round(units * 10) / 10}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Ticket promedio</div>
+        <div class="kpi-value">${formatMoney(Math.round(avg))}</div>
+      </div>
+    </div>
+
+    <div class="sales-layout">
+      <div class="surface-card">
+        <div class="card-header">
+          <h2>Historial de ventas (${list.length})</h2>
+          ${q ? `<span style="font-size:0.8rem;color:var(--text-secondary);">Filtrado por “${escapeHTML(uiState.searchQuery)}”</span>` : ''}
+        </div>
+        ${list.length ? `
+          <div class="sales-list">
+            ${list.map(s => `
+              <div class="sale-row">
+                <div class="sale-when">
+                  <strong>${escapeHTML(formatDateShort(s.date))}</strong>
+                  <span>${escapeHTML(s.time || '')}</span>
+                </div>
+                <div class="sale-body">
+                  <h4>${s.patientId ? `<a href="#" onclick="openPatientRecord('${escapeHTML(s.patientId)}');return false;">${escapeHTML(s.patientName)}</a>` : 'Venta de mostrador'}</h4>
+                  <p>${s.items.map(i => `${escapeHTML(i.name)} ×${escapeHTML(i.qty)}`).join(' • ')}</p>
+                  <p class="sale-meta">${escapeHTML(s.method || '')}${s.appointmentId ? ' • junto a una cita' : ''}${s.createdBy ? ` • ${escapeHTML(s.createdBy)}` : ''}</p>
+                </div>
+                <div class="sale-total">${formatMoney(s.total)}</div>
+                <button class="round-action-btn danger-btn" title="Anular venta" aria-label="Anular venta" onclick="askVoidSale('${escapeHTML(s.id)}')">↺</button>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <div class="progress-empty" style="margin:16px;">
+            <p>${(state.sales || []).length ? 'No hay ventas en este período.' : 'Aún no hay ventas registradas.'}</p>
+            <button class="btn-gold btn-sm" onclick="openSaleModal()">＋ Registrar una venta</button>
+          </div>
+        `}
+      </div>
+
+      <div class="right-stack">
+        <div class="surface-card mini-feed-card">
+          <h3>Más vendidos (${escapeHTML(periodLabel.toLowerCase())})</h3>
+          ${top.length ? `
+            <div class="top-products">
+              ${top.map((p, i) => `
+                <div class="top-product">
+                  <div class="top-product-head">
+                    <span>${i + 1}. ${escapeHTML(p.name)}</span>
+                    <strong>${formatMoney(p.revenue)}</strong>
+                  </div>
+                  <div class="kpi-progress-track"><div class="kpi-progress-bar" style="width:${Math.round((p.revenue / maxRevenue) * 100)}%"></div></div>
+                  <small>${Math.round(p.qty * 10) / 10} unidad(es)</small>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<p style="font-size:0.84rem;color:var(--text-secondary);">Sin ventas en este período.</p>'}
+        </div>
+
+        <div class="surface-card mini-feed-card">
+          <h3>Stock de productos de venta</h3>
+          ${retail.length ? `
+            <div class="mini-feed-list">
+              ${retail.map(item => {
+                const low = Number(item.stock) <= Number(item.minStock);
+                return `
+                  <div class="mini-feed-item">
+                    <span class="pastel-avatar ${low ? 'pastel-amber' : 'pastel-sage'}">${low ? '⚠️' : '🧴'}</span>
+                    <div class="entity-text" style="flex:1;min-width:0;">
+                      <h4>${escapeHTML(item.name)}</h4>
+                      <p>${formatMoney(item.salePrice)} • <span style="color:${low ? 'var(--status-warning-text)' : 'inherit'};">quedan ${escapeHTML(item.stock)} ${escapeHTML(item.unit || '')}</span></p>
+                    </div>
+                    <button class="btn-soft btn-sm" ${Number(item.stock) > 0 ? '' : 'disabled'} onclick="openSaleModal({ inventoryId: '${escapeHTML(item.id)}' })">Vender</button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : `
+            <p style="font-size:0.84rem;color:var(--text-secondary);">No hay productos con precio de venta. Agrégalos en <a href="#" onclick="switchView('inventory');return false;">Inventario</a>.</p>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Anular venta: devuelve el stock y quita el ingreso de Finanzas y la compra del expediente
+function askVoidSale(saleId) {
+  const sale = (state.sales || []).find(s => s.id === saleId);
+  if (!sale) return;
+  openConfirmModal(
+    'Anular venta',
+    `Se anulará la venta de <strong>${formatMoney(sale.total)}</strong> del ${escapeHTML(formatDateLong(sale.date))} (${sale.items.map(i => `${escapeHTML(i.name)} ×${escapeHTML(i.qty)}`).join(', ')}). Los productos vuelven al inventario y el ingreso se quita de Finanzas.`,
+    () => voidSale(saleId)
+  );
+}
+
+async function voidSale(saleId) {
+  const sale = (state.sales || []).find(s => s.id === saleId);
+  if (!sale) return;
+  try {
+    await adminApi(`/api/admin/sales/${encodeURIComponent(saleId)}`, { method: 'DELETE' });
+  } catch (err) {
+    showToast(err.message);
+    return;
+  }
+  sale.items.forEach(i => {
+    const item = state.inventory.find(x => x.id === i.inventoryId);
+    if (item) item.stock = Math.round((Number(item.stock) + Number(i.qty)) * 100) / 100;
+  });
+  state.finances = state.finances.filter(f => f.id !== sale.financeId);
+  if (sale.patientId) {
+    const patient = state.patients.find(p => p.id === sale.patientId);
+    if (patient) patient.purchases = (patient.purchases || []).filter(c => c.id !== sale.purchaseId);
+  }
+  state.sales = state.sales.filter(s => s.id !== saleId);
+  saveState();
+  showToast('Venta anulada. Stock devuelto al inventario.');
   renderWorkspace();
 }
 
@@ -4730,7 +4950,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const params = new URLSearchParams(window.location.search);
   const requestedView = params.get('vista');
-  const viewAliases = { agenda: 'agenda', inventario: 'inventory', expedientes: 'patients', configuracion: 'settings', equipo: 'team' };
+  const viewAliases = { ventas: 'sales', agenda: 'agenda', inventario: 'inventory', expedientes: 'patients', configuracion: 'settings', equipo: 'team' };
   if (requestedView === 'cliente' || window.location.hash === '#cliente') {
     switchView('client-portal');
   } else {

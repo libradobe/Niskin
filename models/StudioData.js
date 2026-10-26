@@ -135,6 +135,25 @@ const FinanceSchema = new mongoose.Schema({
   amount: { type: Number, required: true }
 }, { timestamps: true });
 
+// 4b. Ventas de productos (retail): cada venta con sus productos, clienta y cobro
+const SaleSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  date: { type: String, required: true },
+  time: { type: String, default: '' },
+  patientId: { type: String, default: '' },
+  patientName: { type: String, default: '' },
+  items: {
+    type: [{ _id: false, inventoryId: String, name: String, qty: Number, unitPrice: Number }],
+    default: []
+  },
+  total: { type: Number, default: 0 },
+  method: { type: String, default: 'Efectivo' },
+  financeId: { type: String, default: '' },
+  purchaseId: { type: String, default: '' },
+  appointmentId: { type: String, default: '' },
+  createdBy: { type: String, default: '' }
+}, { timestamps: true });
+
 // 5. Esquema de Tratamientos / Protocolos
 const TreatmentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -249,6 +268,7 @@ module.exports = {
   Appointment: mongoose.model('Appointment', AppointmentSchema),
   Inventory: mongoose.model('Inventory', InventorySchema),
   Finance: mongoose.model('Finance', FinanceSchema),
+  Sale: mongoose.model('Sale', SaleSchema),
   Treatment: mongoose.model('Treatment', TreatmentSchema),
   Specialist: mongoose.model('Specialist', SpecialistSchema),
   ClientAccount: mongoose.model('ClientAccount', ClientAccountSchema),
