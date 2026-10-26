@@ -32,7 +32,7 @@ El repositorio contiene el servidor (`server.js`, `auth.js`), los modelos de Mon
 
 ## 2. Subir el Frontend a Hostinger (`public_html`)
 
-El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estáticos: `index.html` (inicio), `panel.html`, `clientes.html`, estilos (`styles.css`, `clientes.css`, `landing.css`), scripts (`app.js`, `clientes.js`, `landing.js`, `notificaciones.js`, `theme-guard.js`, `config.js`, `data.js`), el service worker `sw.js`, los manifiestos `.webmanifest`, la carpeta `assets/` (logo e íconos) y `.htaccess`.
+El paquete **`Niskin-Frontend-Hostinger.zip`** contiene solo los archivos estáticos: `index.html` (inicio), `panel.html`, `clientes.html`, estilos (`styles.css`, `clientes.css`, `landing.css`), scripts (`app.js`, `clientes.js`, `landing.js`, `facemap.js`, `notificaciones.js`, `theme-guard.js`, `config.js`, `data.js`), el service worker `sw.js`, los manifiestos `.webmanifest`, la carpeta `assets/` (logo e íconos) y `.htaccess`.
 
 > `.htaccess` es un archivo oculto. En el Administrador de archivos activa "Mostrar archivos ocultos" y confirma que se reemplazó; si no, la URL corta `/clientes` y el control de caché no funcionan.
 
@@ -77,6 +77,14 @@ En **Configuración** (administradoras y cosmetólogas):
 - **Reservas en línea y recordatorios:** pausar reservas, hasta cuántos días antes se reserva, citas activas por clienta y recordatorios push.
 
 **Expedientes:** cada ficha permite **editar los datos** de la paciente (contacto, edad, biotipo, fototipo, motivo y alergias), registrar **evaluaciones** de 4 indicadores de la piel (0–100) con fecha y observaciones, ver la **tendencia** de cada indicador desde la primera evaluación, escribir el **plan de tratamiento**, editar la rutina en casa, **editar o eliminar sesiones** y ver sus citas. La app ya no guarda fotos (para no llenar MongoDB); las que existían quedan en la base de datos sin mostrarse.
+
+**Ficha técnica:** en cada expediente, evaluación de la piel (grosor, textura, oleosidad, hidratación, poros, sensibilidad, grado de acné y hallazgos), antecedentes médicos con alertas (embarazo, isotretinoína, anticoagulantes…), hábitos, contraindicaciones y consentimiento informado. Botón **Imprimir** para una versión con espacio para firmas.
+
+**Mapa facial antes / después:** un rostro dibujado donde se marcan acné, manchas, arrugas, poros, rojez, cicatrices y zonas secas tocando la figura. Tiene pestañas "Antes" y "Después", "Copiar marcas de Antes", deshacer y una leyenda con el conteo (ej. Acné 6 → 2). Se guarda como coordenadas, no como imagen, así casi no ocupa espacio. La clienta lo ve en "Mi piel" sin las notas internas.
+
+**Productos por sesión e inventario:** al registrar una sesión o al "Cobrar y completar" una cita se eligen los productos usados (vienen precargados con los del tratamiento) y se descuentan del inventario; quedan anotados en la sesión.
+
+**Venta de productos:** "Registrar venta" en Inventario, "Vender productos" en el expediente o "Agregar productos vendidos" al cobrar una cita. Se eligen productos y cantidades, se descuenta el stock (no deja vender más de lo que hay), se registra el ingreso en Finanzas y la compra queda en el expediente de la clienta.
 
 **Calendario:** en el Panel Principal, tocar un día abre la lista de citas de ese día (con WhatsApp, confirmar, cobrar y ver expediente) y el botón para agendar en esa fecha. Los días cerrados aparecen rayados.
 

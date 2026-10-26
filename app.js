@@ -2059,23 +2059,47 @@ function openCompleteSessionModal(appointmentId) {
         <li><span>Precio</span><strong style="font-family:inherit;">${formatMoney(app.price)}</strong></li>
         <li><span>${isPayAtEnd(app) ? 'Depósito' : 'Depósito pagado'}</span><strong style="font-family:inherit;">${isPayAtEnd(app) ? 'Sin depósito' : formatMoney(app.depositPaid)}</strong></li>
       </ul>
+      ${renderProductPicker('done', {
+        mode: 'usage',
+        preset: (state.treatments.find(t => t.id === app.treatmentId)?.suppliesUsed) || [],
+        label: 'Productos usados en la sesión',
+        hint: 'Se descuentan del inventario al completar.'
+      })}
+      <details class="sale-addon">
+        <summary>🛍 Agregar productos vendidos (opcional)</summary>
+        ${renderProductPicker('sold', { mode: 'sale', label: 'Productos que se lleva la clienta' })}
+      </details>
       <div class="form-row">
         <div class="form-group">
-          <label for="mFinalAmount">${isPayAtEnd(app) ? 'Total a cobrar' : 'Resto a cobrar'}</label>
-          <input id="mFinalAmount" type="number" min="0" class="form-control" value="${escapeHTML(due)}">
+          <label for="mFinalAmount">${isPayAtEnd(app) ? 'Servicio: total a cobrar' : 'Servicio: resto a cobrar'}</label>
+          <input id="mFinalAmount" type="number" min="0" class="form-control" value="${escapeHTML(due)}" oninput="updateCheckoutTotal()">
         </div>
         <div class="form-group">
           <label for="mFinalMethod">Método de pago</label>
           <select id="mFinalMethod" class="form-control">${paymentMethodOptions('Efectivo')}</select>
         </div>
       </div>
-      <p class="admin-gate-hint" style="text-align:left;">Al completar se registra el cobro en Finanzas, se descuentan los insumos de cabina y se agrega la sesión al expediente.</p>
+      <div class="checkout-total">
+        <span>Total a cobrar hoy</span>
+        <strong id="checkoutTotal">${formatMoney(due)}</strong>
+      </div>
+      <p id="mDoneMsg" class="form-message" hidden></p>
+      <p class="admin-gate-hint" style="text-align:left;">Al completar se registra el cobro en Finanzas, se descuentan los productos del inventario y se agrega la sesión al expediente.</p>
     `,
     `
       <button class="btn-soft" onclick="closeModal()">Cancelar</button>
       <button class="btn-gold" onclick="completeAppointmentSession('${escapeHTML(app.id)}')">Cobrar y completar</button>
     `
   );
+  uiState.onPickerChange = prefix => { if (prefix === 'sold') updateCheckoutTotal(); };
+  renderPickerList('done');
+  renderPickerList('sold');
+}
+
+function updateCheckoutTotal() {
+  const service = Math.max(0, Number(document.getElementById('mFinalAmount')?.value) || 0);
+  const el = document.getElementById('checkoutTotal');
+  if (el) el.textContent = formatMoney(service + pickerTotal('sold'));
 }
 
 function completeAppointmentSession(appointmentId) {
@@ -2087,6 +2111,18 @@ function completeAppointmentSession(appointmentId) {
     ? Math.max(0, Number(amountInput.value) || 0)
     : Math.max(0, Number(app.price) - Number(app.depositPaid || 0));
   const method = document.getElementById('mFinalMethod')?.value || 'Efectivo';
+
+  // No se puede vender más de lo que hay en inventario
+  const shortSale = saleStockProblem('sold');
+  if (shortSale) {
+    const item = state.inventory.find(i => i.id === shortSale.inventoryId);
+    const msg = document.getElementById('mDoneMsg');
+    if (msg) {
+      msg.textContent = `No hay suficiente "${item?.name || 'producto'}" para vender (quedan ${item?.stock ?? 0}).`;
+      msg.hidden = false;
+    }
+    return;
+  }
 
   app.status = 'Completada';
   app.finalPaid = remainingAmount;
@@ -2104,14 +2140,12 @@ function completeAppointmentSession(appointmentId) {
   }
 
   const treatment = state.treatments.find(t => t.id === app.treatmentId);
-  if (treatment && Array.isArray(treatment.suppliesUsed)) {
-    treatment.suppliesUsed.forEach(use => {
-      const invItem = state.inventory.find(i => i.id === use.inventoryId);
-      if (invItem) {
-        invItem.stock = Math.max(0, invItem.stock - use.qty);
-      }
-    });
-  }
+  const productsUsed = document.getElementById('donePicker')
+    ? applyProductUsage(pickerItems('done'))
+    : applyProductUsage(treatment?.suppliesUsed || []);
+  const sale = pickerItems('sold').length
+    ? recordProductSale({ patientId: app.patientId, rows: pickerItems('sold'), method, date: app.date })
+    : null;
 
   const patient = state.patients.find(p => p.id === app.patientId);
   if (patient) {
@@ -2122,14 +2156,16 @@ function completeAppointmentSession(appointmentId) {
       specialistName: app.specialistName,
       activesApplied: treatment ? treatment.description : 'Protocolo personalizado en cabina Niskin',
       notes: 'Sesión completada satisfactoriamente. Se actualizaron indicaciones de cuidado en casa.',
-      improvementScore: ''
+      improvementScore: '',
+      productsUsed
     });
   }
 
   saveState();
   closeModal();
-  showToast(remainingAmount > 0
-    ? `Sesión completada. Cobro de ${formatMoney(remainingAmount)} registrado en Finanzas.`
+  const charged = remainingAmount + (sale ? sale.total : 0);
+  showToast(charged > 0
+    ? `Sesión completada. Cobro de ${formatMoney(charged)} registrado en Finanzas.`
     : 'Sesión completada.');
   renderWorkspace();
 }
@@ -2342,6 +2378,7 @@ function renderPatientsView() {
             <button class="btn-gold btn-sm" onclick="openNewSessionModal('${escapeHTML(p.id)}')">＋ Registrar sesión</button>
             <button class="btn-soft btn-sm" onclick="openEvaluationModal('${escapeHTML(p.id)}')">📈 Nueva evaluación</button>
             <button class="btn-soft btn-sm" onclick="openEditPatientModal('${escapeHTML(p.id)}')">✎ Editar datos</button>
+            <button class="btn-soft btn-sm" onclick="openSaleModal({ patientId: '${escapeHTML(p.id)}' })">🛍 Vender productos</button>
             <button class="btn-soft btn-sm whatsapp-soft" onclick="sendPatientWhatsApp('${escapeHTML(p.id)}')">WhatsApp</button>
             ${isStaffManager() ? `<button class="btn-soft btn-sm danger-soft" onclick="askDelete('patient', '${escapeHTML(p.id)}')">Eliminar</button>` : ''}
           </div>
@@ -2358,6 +2395,25 @@ function renderPatientsView() {
           ${p.allergies && !/^ningun/i.test(p.allergies) ? `
             <div class="allergy-alert">⚠️ <strong>Alergias / precauciones:</strong> ${escapeHTML(p.allergies)}</div>
           ` : ''}
+
+          <section>
+            <div class="section-head">
+              <h3>Ficha técnica</h3>
+              <div class="section-head-actions">
+                <button class="btn-soft btn-sm" onclick="printTechSheet('${escapeHTML(p.id)}')">🖨 Imprimir</button>
+                <button class="btn-soft btn-sm" onclick="openTechSheetModal('${escapeHTML(p.id)}')">✎ Editar ficha</button>
+              </div>
+            </div>
+            ${renderTechSheetSection(p)}
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Mapa facial: antes y después</h3>
+              <button class="btn-soft btn-sm" onclick="openFaceMapModal('${escapeHTML(p.id)}')">✎ Editar mapa</button>
+            </div>
+            ${renderFaceMapSection(p)}
+          </section>
 
           <section>
             <div class="section-head">
@@ -2414,11 +2470,31 @@ function renderPatientsView() {
                       </div>
                     </div>
                     ${ses.activesApplied ? `<p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;"><strong>Activos y aparatología:</strong> ${escapeHTML(ses.activesApplied)}</p>` : ''}
+                    ${(ses.productsUsed || []).length ? `<p class="session-products"><strong>Productos usados:</strong> ${ses.productsUsed.map(u => `${escapeHTML(u.name)} (${escapeHTML(u.qty)} ${escapeHTML(u.unit || '')})`).join(', ')}</p>` : ''}
                     ${ses.notes ? `<p style="font-size:0.84rem;color:var(--text-primary);"><strong>Evolución y observaciones:</strong> ${escapeHTML(ses.notes)}</p>` : ''}
                   </div>
                 `).join('')}
               </div>
             ` : '<div class="progress-empty"><p>Aún no hay sesiones registradas.</p></div>'}
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Compras de productos (${(p.purchases || []).length})</h3>
+              <button class="btn-soft btn-sm" onclick="openSaleModal({ patientId: '${escapeHTML(p.id)}' })">＋ Vender</button>
+            </div>
+            ${(p.purchases || []).length ? `
+              <div class="patient-appts">
+                ${p.purchases.map(c => `
+                  <div class="patient-appt">
+                    <div>
+                      <strong>${escapeHTML(formatDateShort(c.date))} • ${formatMoney(c.total)}</strong>
+                      <p>${(c.items || []).map(i => `${escapeHTML(i.name)} x${escapeHTML(i.qty)}`).join(', ')} • ${escapeHTML(c.method || '')}</p>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<div class="progress-empty"><p>Sin compras registradas.</p></div>'}
           </section>
 
           <section>
@@ -2444,6 +2520,423 @@ function renderPatientsView() {
       </div>
     </div>
   `;
+}
+
+// ============================================================================
+// EXPEDIENTE: MAPA FACIAL ANTES / DESPUÉS (editable)
+// ============================================================================
+function emptyFaceSide() {
+  return { date: '', notes: '', markers: [] };
+}
+
+function faceMapOf(p) {
+  const fm = p.faceMap || {};
+  return {
+    before: { ...emptyFaceSide(), ...(fm.before || {}), markers: [...(fm.before?.markers || [])] },
+    after: { ...emptyFaceSide(), ...(fm.after || {}), markers: [...(fm.after?.markers || [])] }
+  };
+}
+
+function renderFaceMapSection(p) {
+  const fm = faceMapOf(p);
+  const hasAny = fm.before.markers.length || fm.after.markers.length || fm.before.notes || fm.after.notes;
+  if (!hasAny) {
+    return `
+      <div class="progress-empty">
+        <p>Marca en el rostro dónde están el acné, las manchas, las arrugas u otros hallazgos. Luego compáralo con el "Después".</p>
+        <button class="btn-gold btn-sm" onclick="openFaceMapModal('${escapeHTML(p.id)}')">＋ Crear mapa facial</button>
+      </div>
+    `;
+  }
+  const side = (key, title) => `
+    <div class="fm-side">
+      <div class="fm-side-head"><strong>${title}</strong><span>${fm[key].date ? escapeHTML(formatDateShort(fm[key].date)) : ''}</span></div>
+      ${NiskinFaceMap.faceSVG(fm[key].markers, { label: title })}
+      ${fm[key].notes ? `<p class="fm-notes">${escapeHTML(fm[key].notes)}</p>` : ''}
+    </div>
+  `;
+  return `
+    <div class="fm-compare">
+      ${side('before', 'Antes')}
+      ${side('after', 'Después')}
+    </div>
+    ${NiskinFaceMap.legendHTML(fm.before.markers, fm.after.markers)}
+  `;
+}
+
+function openFaceMapModal(patientId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const data = faceMapOf(p);
+  if (!data.before.date && !data.before.markers.length) data.before.date = toISODate(new Date());
+  uiState.faceEdit = { patientId, side: 'before', tool: 'acne', data, history: [] };
+  openModalWithHTML(`Mapa facial — ${p.name}`, '<div id="fmEditor"></div>', `
+    <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+    <button class="btn-gold" onclick="saveFaceMap()">Guardar mapa</button>
+  `);
+  document.querySelector('.modal-box')?.classList.add('modal-wide');
+  renderFaceEditor();
+}
+
+function renderFaceEditor() {
+  const fe = uiState.faceEdit;
+  const box = document.getElementById('fmEditor');
+  if (!fe || !box) return;
+  const current = fe.data[fe.side];
+  box.innerHTML = `
+    <div class="fm-tabs" role="tablist">
+      ${['before', 'after'].map(s => `
+        <button type="button" role="tab" class="fm-tab ${fe.side === s ? 'active' : ''}" aria-selected="${fe.side === s}" onclick="setFaceSide('${s}')">
+          ${s === 'before' ? 'Antes' : 'Después'} <small>(${fe.data[s].markers.length})</small>
+        </button>
+      `).join('')}
+    </div>
+    <div class="fm-tools" aria-label="Tipo de marca">
+      ${NiskinFaceMap.MARKS.map(m => `
+        <button type="button" class="fm-tool ${fe.tool === m.t ? 'active' : ''}" onclick="setFaceTool('${m.t}')" aria-pressed="${fe.tool === m.t}">
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">${NiskinFaceMap.markShape({ x: 10, y: 10, t: m.t })}</svg>
+          ${escapeHTML(m.es)}
+        </button>
+      `).join('')}
+      <button type="button" class="fm-tool fm-erase ${fe.tool === 'erase' ? 'active' : ''}" onclick="setFaceTool('erase')" aria-pressed="${fe.tool === 'erase'}">⌫ Borrar marca</button>
+    </div>
+    <div class="fm-editor-body">
+      <div class="fm-canvas">
+        ${NiskinFaceMap.faceSVG(current.markers, { id: 'fmCanvas', interactive: true, label: 'Rostro para marcar' })}
+        <p class="admin-gate-hint">${fe.tool === 'erase' ? 'Toca una marca para borrarla.' : 'Toca el rostro para agregar la marca seleccionada.'}</p>
+      </div>
+      <div class="fm-side-form">
+        <div class="form-group">
+          <label for="fmDate">Fecha de "${fe.side === 'before' ? 'Antes' : 'Después'}"</label>
+          <input id="fmDate" type="date" class="form-control" value="${escapeHTML(current.date)}" onchange="uiState.faceEdit.data[uiState.faceEdit.side].date = this.value">
+        </div>
+        <div class="form-group">
+          <label for="fmNotes">Observaciones</label>
+          <textarea id="fmNotes" class="form-control" rows="4" maxlength="600" oninput="uiState.faceEdit.data[uiState.faceEdit.side].notes = this.value" placeholder="Ej. Acné inflamatorio en mejillas, manchas en pómulos…">${escapeHTML(current.notes)}</textarea>
+        </div>
+        ${NiskinFaceMap.legendHTML(fe.data.before.markers, fe.data.after.markers)}
+        <div class="fm-actions">
+          <button type="button" class="btn-soft btn-sm" onclick="undoFaceMark()" ${fe.history.length ? '' : 'disabled'}>↶ Deshacer</button>
+          ${fe.side === 'after' ? '<button type="button" class="btn-soft btn-sm" onclick="copyBeforeToAfter()">Copiar marcas de "Antes"</button>' : ''}
+          <button type="button" class="btn-soft btn-sm danger-soft" onclick="clearFaceSide()">Limpiar este lado</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const svg = document.getElementById('fmCanvas');
+  svg.addEventListener('click', handleFaceClick);
+}
+
+function handleFaceClick(event) {
+  const fe = uiState.faceEdit;
+  const markers = fe.data[fe.side].markers;
+  const markEl = event.target.closest('.fm-mark');
+  if (fe.tool === 'erase') {
+    if (!markEl) return;
+    fe.history.push({ side: fe.side, markers: [...markers] });
+    markers.splice(Number(markEl.dataset.index), 1);
+  } else {
+    if (markers.length >= 300) return showToast('Máximo 300 marcas por lado.');
+    fe.history.push({ side: fe.side, markers: [...markers] });
+    markers.push({ ...NiskinFaceMap.pointFromEvent(event.currentTarget, event), t: fe.tool });
+  }
+  renderFaceEditor();
+}
+
+function setFaceSide(side) {
+  const fe = uiState.faceEdit;
+  fe.side = side;
+  if (side === 'after' && !fe.data.after.date) fe.data.after.date = toISODate(new Date());
+  renderFaceEditor();
+}
+
+function setFaceTool(tool) {
+  uiState.faceEdit.tool = tool;
+  renderFaceEditor();
+}
+
+function undoFaceMark() {
+  const fe = uiState.faceEdit;
+  const last = fe.history.pop();
+  if (!last) return;
+  fe.data[last.side].markers = last.markers;
+  fe.side = last.side;
+  renderFaceEditor();
+}
+
+function copyBeforeToAfter() {
+  const fe = uiState.faceEdit;
+  fe.history.push({ side: 'after', markers: [...fe.data.after.markers] });
+  fe.data.after.markers = fe.data.before.markers.map(m => ({ ...m }));
+  renderFaceEditor();
+  showToast('Marcas copiadas. Borra las que ya mejoraron.');
+}
+
+function clearFaceSide() {
+  const fe = uiState.faceEdit;
+  fe.history.push({ side: fe.side, markers: [...fe.data[fe.side].markers] });
+  fe.data[fe.side].markers = [];
+  renderFaceEditor();
+}
+
+function saveFaceMap() {
+  const fe = uiState.faceEdit;
+  const p = fe && state.patients.find(x => x.id === fe.patientId);
+  if (!p) return;
+  const clean = side => ({
+    date: side.date || '',
+    notes: String(side.notes || '').trim().slice(0, 600),
+    markers: side.markers.slice(0, 300).map(m => ({ x: Number(m.x), y: Number(m.y), t: m.t }))
+  });
+  p.faceMap = { before: clean(fe.data.before), after: clean(fe.data.after) };
+  uiState.faceEdit = null;
+  saveState();
+  closeModal();
+  showToast('Mapa facial guardado.');
+  renderWorkspace();
+}
+
+// ============================================================================
+// EXPEDIENTE: FICHA TÉCNICA COSMETOLÓGICA
+// ============================================================================
+const TECH_SHEET = [
+  {
+    title: 'Evaluación de la piel',
+    fields: [
+      { k: 'grosor', label: 'Grosor', type: 'select', options: ['Fina', 'Media', 'Gruesa'] },
+      { k: 'textura', label: 'Textura', type: 'select', options: ['Lisa', 'Irregular', 'Áspera'] },
+      { k: 'oleosidad', label: 'Oleosidad', type: 'select', options: ['Seca', 'Normal', 'Mixta', 'Grasa'] },
+      { k: 'hidratacion', label: 'Hidratación', type: 'select', options: ['Normal', 'Deshidratada', 'Muy deshidratada'] },
+      { k: 'poros', label: 'Poros', type: 'select', options: ['Cerrados', 'Dilatados en zona T', 'Dilatados generalizados'] },
+      { k: 'sensibilidad', label: 'Sensibilidad', type: 'select', options: ['Baja', 'Media', 'Alta'] },
+      { k: 'acneGrado', label: 'Acné', type: 'select', options: ['No aplica', 'Grado I (comedones)', 'Grado II (pápulas)', 'Grado III (pústulas)', 'Grado IV (nódulos / quistes)'] },
+      { k: 'hallazgos', label: 'Hallazgos', type: 'checks', options: ['Manchas / hiperpigmentación', 'Melasma', 'Rosácea / eritema', 'Arrugas / líneas de expresión', 'Flacidez', 'Cicatrices de acné', 'Telangiectasias', 'Ojeras', 'Milium', 'Queratosis'] }
+    ]
+  },
+  {
+    title: 'Antecedentes médicos',
+    fields: [
+      { k: 'condiciones', label: 'Condiciones a tener en cuenta', type: 'checks', warn: true, options: ['Embarazo o lactancia', 'Isotretinoína (últimos 6 meses)', 'Anticoagulantes', 'Diabetes', 'Herpes labial recurrente', 'Marcapasos o implantes metálicos', 'Enfermedad autoinmune', 'Tendencia a queloides', 'Epilepsia', 'Cáncer de piel (actual o previo)'] },
+      { k: 'enfermedades', label: 'Otras enfermedades', type: 'text' },
+      { k: 'medicamentos', label: 'Medicamentos actuales', type: 'text' },
+      { k: 'cirugias', label: 'Cirugías o procedimientos estéticos', type: 'text' },
+      { k: 'tratamientosPrevios', label: 'Tratamientos faciales previos', type: 'text' }
+    ]
+  },
+  {
+    title: 'Hábitos',
+    fields: [
+      { k: 'sol', label: 'Exposición al sol', type: 'select', options: ['Baja', 'Moderada', 'Alta'] },
+      { k: 'protector', label: 'Protector solar', type: 'select', options: ['Diario', 'A veces', 'No usa'] },
+      { k: 'tabaco', label: 'Fuma', type: 'select', options: ['No', 'Sí'] },
+      { k: 'agua', label: 'Agua al día', type: 'select', options: ['Menos de 1 litro', '1 a 2 litros', 'Más de 2 litros'] },
+      { k: 'sueno', label: 'Horas de sueño', type: 'select', options: ['Menos de 6 h', '6 a 8 h', 'Más de 8 h'] },
+      { k: 'rutinaActual', label: 'Rutina de cuidado actual', type: 'textarea' }
+    ]
+  },
+  {
+    title: 'Observaciones y consentimiento',
+    fields: [
+      { k: 'contraindicaciones', label: 'Contraindicaciones', type: 'textarea' },
+      { k: 'observaciones', label: 'Observaciones del especialista', type: 'textarea' },
+      { k: 'consentimiento', label: 'Consentimiento informado firmado', type: 'check' },
+      { k: 'consentimientoFecha', label: 'Fecha del consentimiento', type: 'date' }
+    ]
+  }
+];
+
+function techFieldValueText(field, value) {
+  if (field.type === 'checks') return (value || []).join(', ');
+  if (field.type === 'check') return value ? 'Sí' : 'No';
+  if (field.type === 'date') return value ? formatDateLong(value) : '';
+  return value || '';
+}
+
+function renderTechSheetSection(p) {
+  const ts = p.technicalSheet || {};
+  const filled = TECH_SHEET.flatMap(s => s.fields).some(f => {
+    const v = ts[f.k];
+    return Array.isArray(v) ? v.length : Boolean(v);
+  });
+  const flags = ts.condiciones || [];
+  const consent = ts.consentimiento
+    ? `<span class="status-pill status-confirmed"><span class="dot"></span>Consentimiento firmado${ts.consentimientoFecha ? ` • ${escapeHTML(formatDateShort(ts.consentimientoFecha))}` : ''}</span>`
+    : '<span class="status-pill status-pending"><span class="dot"></span>Consentimiento pendiente</span>';
+  if (!filled) {
+    return `
+      <div class="progress-empty">
+        <p>Completa la ficha técnica: evaluación de la piel, antecedentes médicos, hábitos y consentimiento informado.</p>
+        <button class="btn-gold btn-sm" onclick="openTechSheetModal('${escapeHTML(p.id)}')">＋ Completar ficha técnica</button>
+      </div>
+    `;
+  }
+  const keyFields = ['grosor', 'textura', 'oleosidad', 'hidratacion', 'poros', 'sensibilidad', 'acneGrado', 'sol', 'protector'];
+  const all = TECH_SHEET.flatMap(s => s.fields);
+  return `
+    <div class="tech-summary">
+      ${consent}
+      ${flags.length ? `<div class="tech-flags">${flags.map(f => `<span class="tech-flag">⚠️ ${escapeHTML(f)}</span>`).join('')}</div>` : ''}
+      <dl class="tech-grid">
+        ${keyFields.map(k => all.find(f => f.k === k)).filter(f => ts[f.k]).map(f => `
+          <div><dt>${escapeHTML(f.label)}</dt><dd>${escapeHTML(techFieldValueText(f, ts[f.k]))}</dd></div>
+        `).join('')}
+      </dl>
+      ${(ts.hallazgos || []).length ? `<p class="tech-line"><strong>Hallazgos:</strong> ${escapeHTML(ts.hallazgos.join(', '))}</p>` : ''}
+      ${ts.medicamentos ? `<p class="tech-line"><strong>Medicamentos:</strong> ${escapeHTML(ts.medicamentos)}</p>` : ''}
+      ${ts.contraindicaciones ? `<p class="tech-line tech-warn"><strong>Contraindicaciones:</strong> ${escapeHTML(ts.contraindicaciones)}</p>` : ''}
+      ${ts.updatedAt ? `<p class="tech-meta">Actualizada ${escapeHTML(formatDateShort(ts.updatedAt))}${ts.updatedBy ? ` por ${escapeHTML(ts.updatedBy)}` : ''}</p>` : ''}
+    </div>
+  `;
+}
+
+function techFieldInput(f, ts) {
+  const id = `ts_${f.k}`;
+  const v = ts[f.k];
+  if (f.type === 'select') {
+    return `
+      <div class="form-group">
+        <label for="${id}">${escapeHTML(f.label)}</label>
+        <select id="${id}" class="form-control">
+          <option value="">—</option>
+          ${f.options.map(o => `<option ${o === v ? 'selected' : ''}>${escapeHTML(o)}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+  if (f.type === 'checks') {
+    return `
+      <fieldset class="form-group tech-checks">
+        <legend>${escapeHTML(f.label)}</legend>
+        ${f.options.map((o, i) => `
+          <label class="settings-switch"><input type="checkbox" name="${id}" value="${escapeHTML(o)}" ${(v || []).includes(o) ? 'checked' : ''}> <span>${escapeHTML(o)}</span></label>
+        `).join('')}
+      </fieldset>
+    `;
+  }
+  if (f.type === 'check') {
+    return `<label class="settings-switch"><input type="checkbox" id="${id}" ${v ? 'checked' : ''}> <span>${escapeHTML(f.label)}</span></label>`;
+  }
+  if (f.type === 'textarea') {
+    return `
+      <div class="form-group">
+        <label for="${id}">${escapeHTML(f.label)}</label>
+        <textarea id="${id}" class="form-control" rows="2" maxlength="600">${escapeHTML(v || '')}</textarea>
+      </div>
+    `;
+  }
+  return `
+    <div class="form-group">
+      <label for="${id}">${escapeHTML(f.label)}</label>
+      <input id="${id}" type="${f.type === 'date' ? 'date' : 'text'}" class="form-control" maxlength="200" value="${escapeHTML(v || '')}">
+    </div>
+  `;
+}
+
+function openTechSheetModal(patientId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const ts = p.technicalSheet || {};
+  openModalWithHTML(
+    `Ficha técnica — ${p.name}`,
+    `
+      <div class="form-row">
+        <div class="form-group">
+          <label for="ts_biotype">Biotipo de piel</label>
+          <input id="ts_biotype" class="form-control" list="tsSkinTypes" maxlength="60" value="${escapeHTML(p.skinBiotype || '')}">
+          <datalist id="tsSkinTypes">${SKIN_TYPES.map(o => `<option value="${escapeHTML(o)}">`).join('')}</datalist>
+        </div>
+        <div class="form-group">
+          <label for="ts_fitz">Fototipo</label>
+          <select id="ts_fitz" class="form-control">
+            ${(FITZPATRICK.includes(p.fitzpatrick) ? FITZPATRICK : [p.fitzpatrick, ...FITZPATRICK]).map(o => `<option ${o === p.fitzpatrick ? 'selected' : ''}>${escapeHTML(o)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      ${TECH_SHEET.map(section => `
+        <section class="tech-section">
+          <h4>${escapeHTML(section.title)}</h4>
+          <div class="tech-fields">
+            ${section.fields.map(f => techFieldInput(f, ts)).join('')}
+          </div>
+        </section>
+      `).join('')}
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" onclick="saveTechSheet('${escapeHTML(p.id)}')">Guardar ficha</button>
+    `
+  );
+  document.querySelector('.modal-box')?.classList.add('modal-wide');
+}
+
+function saveTechSheet(patientId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const ts = {};
+  TECH_SHEET.flatMap(s => s.fields).forEach(f => {
+    const id = `ts_${f.k}`;
+    if (f.type === 'checks') ts[f.k] = [...document.querySelectorAll(`input[name="${id}"]:checked`)].map(i => i.value);
+    else if (f.type === 'check') ts[f.k] = document.getElementById(id).checked;
+    else ts[f.k] = String(document.getElementById(id).value || '').trim().slice(0, 600);
+  });
+  const me = getCurrentStaff();
+  ts.updatedAt = toISODate(new Date());
+  ts.updatedBy = me?.isMaster ? '' : (me?.name || '');
+  p.technicalSheet = ts;
+  p.skinBiotype = document.getElementById('ts_biotype').value.trim() || p.skinBiotype;
+  p.fitzpatrick = document.getElementById('ts_fitz').value || p.fitzpatrick;
+  saveState();
+  closeModal();
+  showToast('Ficha técnica guardada.');
+  renderWorkspace();
+}
+
+// Versión imprimible de la ficha técnica (con el mapa facial)
+function printTechSheet(patientId) {
+  const p = state.patients.find(x => x.id === patientId);
+  if (!p) return;
+  const ts = p.technicalSheet || {};
+  const fm = faceMapOf(p);
+  const st = studioSettings();
+  const win = window.open('', '_blank');
+  if (!win) return showToast('Permite las ventanas emergentes para imprimir la ficha.');
+  const sections = TECH_SHEET.map(section => `
+    <h2>${escapeHTML(section.title)}</h2>
+    <table>
+      ${section.fields.map(f => `<tr><th>${escapeHTML(f.label)}</th><td>${escapeHTML(techFieldValueText(f, ts[f.k])) || '—'}</td></tr>`).join('')}
+    </table>
+  `).join('');
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Ficha técnica — ${escapeHTML(p.name)}</title>
+    <style>
+      body { font-family: Georgia, serif; color: #37332F; margin: 32px; }
+      h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 22px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+      p { margin: 2px 0; font-size: 13px; } table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      th { text-align: left; width: 38%; padding: 4px 8px 4px 0; color: #555; font-weight: normal; vertical-align: top; } td { padding: 4px 0; }
+      .faces { display: flex; gap: 24px; } .faces div { flex: 1; text-align: center; font-size: 12px; } .faces svg { width: 100%; max-width: 220px; }
+      .sign { display: flex; gap: 40px; margin-top: 48px; font-size: 12px; } .sign div { flex: 1; border-top: 1px solid #37332F; padding-top: 6px; text-align: center; }
+      @media print { body { margin: 12mm; } }
+    </style></head><body>
+    <h1>Ficha técnica cosmetológica</h1>
+    <p><strong>${escapeHTML(st.businessName || 'Niskin Beauty Studio')}</strong>${st.address ? ` · ${escapeHTML(st.address)}` : ''}</p>
+    <h2>Datos de la paciente</h2>
+    <table>
+      <tr><th>Nombre</th><td>${escapeHTML(p.name)}</td></tr>
+      <tr><th>Edad</th><td>${escapeHTML(formatAge(p.age))}</td></tr>
+      <tr><th>Teléfono / correo</th><td>${escapeHTML(p.phone || '—')} · ${escapeHTML(p.email || '—')}</td></tr>
+      <tr><th>Biotipo / fototipo</th><td>${escapeHTML(p.skinBiotype)} · ${escapeHTML(p.fitzpatrick)}</td></tr>
+      <tr><th>Motivo de consulta</th><td>${escapeHTML(p.mainConcern || '—')}</td></tr>
+      <tr><th>Alergias</th><td>${escapeHTML(p.allergies || '—')}</td></tr>
+    </table>
+    ${sections}
+    <h2>Mapa facial</h2>
+    <div class="faces">
+      <div>${NiskinFaceMap.faceSVG(fm.before.markers)}<p>Antes ${fm.before.date ? `(${escapeHTML(fm.before.date)})` : ''}</p></div>
+      <div>${NiskinFaceMap.faceSVG(fm.after.markers)}<p>Después ${fm.after.date ? `(${escapeHTML(fm.after.date)})` : ''}</p></div>
+    </div>
+    <div class="sign"><div>Firma de la paciente</div><div>Firma del especialista</div></div>
+    <script>window.onload = function () { window.print(); };<\/script>
+    </body></html>`);
+  win.document.close();
 }
 
 function saveTreatmentPlan(patientId) {
@@ -2702,6 +3195,7 @@ function openEditSessionModal(patientId, sessionId) {
         <label for="mEsNotes">Evolución y observaciones</label>
         <textarea id="mEsNotes" class="form-control" rows="3">${escapeHTML(ses.notes || '')}</textarea>
       </div>
+      ${(ses.productsUsed || []).length ? `<p class="admin-gate-hint" style="text-align:left;"><strong>Productos usados:</strong> ${ses.productsUsed.map(u => `${escapeHTML(u.name)} (${escapeHTML(u.qty)})`).join(', ')}</p>` : ''}
       <p class="admin-gate-hint" style="text-align:left;">Editar no cambia cobros ni inventario ya registrados.</p>
     `,
     `
@@ -2791,9 +3285,12 @@ function renderInventoryView() {
           </button>
         `).join('')}
       </div>
-      <button class="btn-gold" onclick="openInventoryModal()">
-        <span>＋</span> Agregar Producto / Insumo
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-soft" onclick="openSaleModal()">🛍 Registrar venta</button>
+        <button class="btn-gold" onclick="openInventoryModal()">
+          <span>＋</span> Agregar Producto / Insumo
+        </button>
+      </div>
     </div>
 
     <div class="kpi-grid">
@@ -2807,7 +3304,7 @@ function renderInventoryView() {
         <div class="kpi-value" style="color:${lowStockCount > 0 ? 'var(--status-warning-text)' : 'var(--status-success-text)'};">
           ${lowStockCount} en Stock Bajo
         </div>
-        <div class="kpi-subtext"><span>Se descuentan automáticamente al registrar sesiones</span></div>
+        <div class="kpi-subtext"><span>Se descuentan al registrar sesiones y ventas</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Valor Costo en Almacén</div>
@@ -2884,23 +3381,233 @@ function restockItem(itemId, delta) {
 }
 
 function sellRetailProduct(itemId) {
-  const item = state.inventory.find(i => i.id === itemId);
-  if (!item || item.stock <= 0) {
-    showToast('No hay stock disponible de este producto.');
-    return;
+  openSaleModal({ inventoryId: itemId });
+}
+
+// ============================================================================
+// SELECTOR DE PRODUCTOS (uso en cabina y venta) — descuenta del inventario
+// ============================================================================
+// uiState.pickers[prefix] = { mode: 'usage' | 'sale', items: [{ inventoryId, qty }] }
+function pickerItemsSource(mode) {
+  return mode === 'sale'
+    ? state.inventory.filter(i => Number(i.salePrice) > 0)
+    : state.inventory;
+}
+
+function initPicker(prefix, mode, preset = []) {
+  uiState.pickers = uiState.pickers || {};
+  uiState.pickers[prefix] = {
+    mode,
+    items: preset
+      .filter(p => state.inventory.some(i => i.id === p.inventoryId))
+      .map(p => ({ inventoryId: p.inventoryId, qty: Number(p.qty) || 1 }))
+  };
+}
+
+function renderProductPicker(prefix, { mode, preset = [], label, hint }) {
+  initPicker(prefix, mode, preset);
+  const options = pickerItemsSource(mode);
+  return `
+    <div class="form-group product-picker" id="${prefix}Picker">
+      <label>${escapeHTML(label)}</label>
+      ${options.length ? `
+        <div class="picker-add">
+          <select id="${prefix}Select" class="form-control" aria-label="${escapeHTML(label)}">
+            ${options.map(i => `
+              <option value="${escapeHTML(i.id)}">${escapeHTML(i.name)}${mode === 'sale' ? ` — ${formatMoney(i.salePrice)}` : ''} (quedan ${escapeHTML(i.stock)} ${escapeHTML(i.unit || '')})</option>
+            `).join('')}
+          </select>
+          <input id="${prefix}Qty" type="number" class="form-control picker-qty" min="0.1" step="${mode === 'sale' ? 1 : 0.1}" value="1" aria-label="Cantidad">
+          <button type="button" class="btn-soft btn-sm" onclick="pickerAdd('${prefix}')">＋ Agregar</button>
+        </div>
+      ` : `<p class="admin-gate-hint" style="text-align:left;">${mode === 'sale' ? 'No hay productos con precio de venta en el inventario.' : 'No hay productos en el inventario.'}</p>`}
+      <div id="${prefix}List" class="picker-list"></div>
+      ${hint ? `<span class="admin-gate-hint" style="text-align:left;">${escapeHTML(hint)}</span>` : ''}
+    </div>
+  `;
+}
+
+function renderPickerList(prefix) {
+  const picker = uiState.pickers?.[prefix];
+  const box = document.getElementById(`${prefix}List`);
+  if (!picker || !box) return;
+  if (!picker.items.length) {
+    box.innerHTML = `<p class="picker-empty">${picker.mode === 'sale' ? 'Ningún producto agregado.' : 'Ningún producto seleccionado.'}</p>`;
+  } else {
+    box.innerHTML = picker.items.map(row => {
+      const item = state.inventory.find(i => i.id === row.inventoryId);
+      if (!item) return '';
+      const short = Number(row.qty) > Number(item.stock);
+      return `
+        <div class="picker-row ${short ? 'is-short' : ''}">
+          <span class="picker-name">${escapeHTML(item.name)}
+            <small>${short ? `Solo quedan ${escapeHTML(item.stock)} ${escapeHTML(item.unit || '')}` : `Stock: ${escapeHTML(item.stock)} ${escapeHTML(item.unit || '')}`}</small>
+          </span>
+          <input type="number" class="form-control picker-qty" min="0.1" step="${picker.mode === 'sale' ? 1 : 0.1}" value="${escapeHTML(row.qty)}"
+                 onchange="pickerSetQty('${prefix}', '${escapeHTML(row.inventoryId)}', this.value)" aria-label="Cantidad de ${escapeHTML(item.name)}">
+          ${picker.mode === 'sale' ? `<span class="picker-line">${formatMoney(item.salePrice * row.qty)}</span>` : `<span class="picker-line">${escapeHTML(item.unit || '')}</span>`}
+          <button type="button" class="round-action-btn danger-btn" title="Quitar" onclick="pickerRemove('${prefix}', '${escapeHTML(row.inventoryId)}')">✕</button>
+        </div>
+      `;
+    }).join('');
   }
-  item.stock -= 1;
+  if (picker.mode === 'sale') {
+    const totalEl = document.getElementById(`${prefix}Total`);
+    if (totalEl) totalEl.textContent = formatMoney(pickerTotal(prefix));
+  }
+  if (typeof uiState.onPickerChange === 'function') uiState.onPickerChange(prefix);
+}
+
+function pickerAdd(prefix) {
+  const picker = uiState.pickers?.[prefix];
+  const id = document.getElementById(`${prefix}Select`)?.value;
+  const qty = Number(document.getElementById(`${prefix}Qty`)?.value) || 1;
+  if (!picker || !id) return;
+  const existing = picker.items.find(r => r.inventoryId === id);
+  if (existing) existing.qty = Math.round((Number(existing.qty) + qty) * 10) / 10;
+  else picker.items.push({ inventoryId: id, qty });
+  renderPickerList(prefix);
+}
+
+function pickerSetQty(prefix, id, value) {
+  const row = uiState.pickers?.[prefix]?.items.find(r => r.inventoryId === id);
+  if (!row) return;
+  row.qty = Math.max(0.1, Number(value) || 1);
+  renderPickerList(prefix);
+}
+
+function pickerRemove(prefix, id) {
+  const picker = uiState.pickers?.[prefix];
+  if (!picker) return;
+  picker.items = picker.items.filter(r => r.inventoryId !== id);
+  renderPickerList(prefix);
+}
+
+function pickerTotal(prefix) {
+  const picker = uiState.pickers?.[prefix];
+  if (!picker) return 0;
+  return picker.items.reduce((sum, r) => {
+    const item = state.inventory.find(i => i.id === r.inventoryId);
+    return sum + (item ? Number(item.salePrice) * Number(r.qty) : 0);
+  }, 0);
+}
+
+function pickerItems(prefix) {
+  return (uiState.pickers?.[prefix]?.items || []).filter(r => Number(r.qty) > 0);
+}
+
+// Descuenta del inventario los productos usados en cabina y devuelve el detalle para la sesión
+function applyProductUsage(rows) {
+  const used = [];
+  rows.forEach(r => {
+    const item = state.inventory.find(i => i.id === r.inventoryId);
+    if (!item) return;
+    item.stock = Math.max(0, Math.round((Number(item.stock) - Number(r.qty)) * 100) / 100);
+    used.push({ inventoryId: item.id, name: item.name, qty: Number(r.qty), unit: item.unit || '' });
+  });
+  return used;
+}
+
+// Venta de productos: descuenta stock, registra el ingreso y la guarda en el expediente
+function recordProductSale({ patientId, rows, method, date }) {
+  const patient = patientId ? state.patients.find(p => p.id === patientId) : null;
+  const items = rows.map(r => {
+    const item = state.inventory.find(i => i.id === r.inventoryId);
+    if (!item) return null;
+    item.stock = Math.max(0, Number(item.stock) - Number(r.qty));
+    return { inventoryId: item.id, name: item.name, qty: Number(r.qty), unitPrice: Number(item.salePrice) };
+  }).filter(Boolean);
+  const total = items.reduce((sum, i) => sum + i.qty * i.unitPrice, 0);
+  if (!items.length || total <= 0) return null;
+
   state.finances.unshift({
-    id: 'fin-' + Date.now(),
-    date: uiState.selectedDate,
-    concept: `Venta Skincare: ${item.name}`,
+    id: 'fin-' + Date.now() + '-v',
+    date,
+    concept: `Venta de productos: ${items.map(i => `${i.name} x${i.qty}`).join(', ')}${patient ? ` — ${patient.name}` : ''}`,
     category: 'Venta Retail Skincare',
     type: 'Ingreso',
-    method: 'Tarjeta / POS',
-    amount: item.salePrice
+    method,
+    amount: total
   });
+  if (patient) {
+    patient.purchases = patient.purchases || [];
+    patient.purchases.unshift({ id: 'compra-' + Date.now(), date, items, total, method });
+  }
+  return { items, total };
+}
+
+function saleStockProblem(prefix) {
+  return pickerItems(prefix).find(r => {
+    const item = state.inventory.find(i => i.id === r.inventoryId);
+    return !item || Number(r.qty) > Number(item.stock);
+  });
+}
+
+// Formulario de venta (Inventario, expediente o botón "Vender")
+function openSaleModal({ patientId = '', inventoryId = '' } = {}) {
+  openModalWithHTML(
+    'Registrar venta de productos',
+    `
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mSalePatient">Clienta</label>
+          <select id="mSalePatient" class="form-control">
+            <option value="">Venta sin clienta registrada</option>
+            ${state.patients.map(p => `<option value="${escapeHTML(p.id)}" ${p.id === patientId ? 'selected' : ''}>${escapeHTML(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mSaleDate">Fecha</label>
+          <input id="mSaleDate" type="date" class="form-control" value="${toISODate(new Date())}">
+        </div>
+      </div>
+      ${renderProductPicker('sale', { mode: 'sale', preset: inventoryId ? [{ inventoryId, qty: 1 }] : [], label: 'Productos' })}
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mSaleMethod">Método de pago</label>
+          <select id="mSaleMethod" class="form-control">${paymentMethodOptions('Efectivo')}</select>
+        </div>
+        <div class="form-group sale-total-box">
+          <label>Total</label>
+          <strong id="saleTotal">${formatMoney(0)}</strong>
+        </div>
+      </div>
+      <p id="mSaleMsg" class="form-message" hidden></p>
+    `,
+    `
+      <button class="btn-soft" onclick="closeModal()">Cancelar</button>
+      <button class="btn-gold" onclick="saveSale()">Registrar venta</button>
+    `
+  );
+  uiState.onPickerChange = null;
+  renderPickerList('sale');
+}
+
+function saveSale() {
+  const msg = document.getElementById('mSaleMsg');
+  const rows = pickerItems('sale');
+  if (!rows.length) {
+    msg.textContent = 'Agrega al menos un producto.';
+    msg.hidden = false;
+    return;
+  }
+  const short = saleStockProblem('sale');
+  if (short) {
+    const item = state.inventory.find(i => i.id === short.inventoryId);
+    msg.textContent = `No hay suficiente "${item?.name || 'producto'}" en inventario (quedan ${item?.stock ?? 0}).`;
+    msg.hidden = false;
+    return;
+  }
+  const result = recordProductSale({
+    patientId: document.getElementById('mSalePatient').value,
+    rows,
+    method: document.getElementById('mSaleMethod').value,
+    date: document.getElementById('mSaleDate').value || toISODate(new Date())
+  });
+  if (!result) return;
   saveState();
-  showToast(`Venta registrada: ${formatMoney(item.salePrice)} sumados a Finanzas.`);
+  closeModal();
+  showToast(`Venta registrada: ${formatMoney(result.total)}. Inventario actualizado.`);
   renderWorkspace();
 }
 
@@ -3660,9 +4367,17 @@ function openNewSessionModal(patientId) {
       </div>
       <div class="form-group">
         <label for="mSesTreatment">Tratamiento realizado</label>
-        <select id="mSesTreatment" class="form-control">
+        <select id="mSesTreatment" class="form-control" onchange="sessionTreatmentChanged()">
           ${state.treatments.map(t => `<option value="${t.id}">${escapeHTML(t.name)} (${formatMoney(t.price)})</option>`).join('')}
         </select>
+      </div>
+      <div id="mSesPickerBox">
+        ${renderProductPicker('ses', {
+          mode: 'usage',
+          preset: state.treatments[0]?.suppliesUsed || [],
+          label: 'Productos usados en la sesión',
+          hint: 'Se descuentan del inventario al registrar la sesión.'
+        })}
       </div>
       <div class="form-group">
         <label for="mSesActives">Activos y aparatología aplicada</label>
@@ -3677,13 +4392,21 @@ function openNewSessionModal(patientId) {
         <textarea id="mSesNotes" class="form-control" rows="3" placeholder="Cómo respondió la piel y recomendaciones post-tratamiento…"></textarea>
       </div>
       <label class="settings-switch"><input type="checkbox" id="mSesCharge" checked> <span>Registrar el cobro en Finanzas (no lo marques si la cita ya se cobró al completarla)</span></label>
-      <label class="settings-switch"><input type="checkbox" id="mSesSupplies" checked> <span>Descontar los insumos del tratamiento del inventario</span></label>
     `,
     `
       <button class="btn-soft" onclick="closeModal()">Cancelar</button>
       <button class="btn-gold" onclick="saveNewSession('${escapeHTML(pat.id)}')">Registrar sesión</button>
     `
   );
+  uiState.onPickerChange = null;
+  renderPickerList('ses');
+}
+
+// Al cambiar el tratamiento se precargan sus productos habituales
+function sessionTreatmentChanged() {
+  const trat = state.treatments.find(t => t.id === document.getElementById('mSesTreatment').value);
+  initPicker('ses', 'usage', trat?.suppliesUsed || []);
+  renderPickerList('ses');
 }
 
 function saveNewSession(patientId) {
@@ -3693,7 +4416,7 @@ function saveNewSession(patientId) {
   if (!pat || !trat) return;
   const date = document.getElementById('mSesDate').value || toISODate(new Date());
   const charge = document.getElementById('mSesCharge').checked;
-  const useSupplies = document.getElementById('mSesSupplies').checked;
+  const productsUsed = applyProductUsage(pickerItems('ses'));
 
   pat.sessions.unshift({
     id: 'ses-' + Date.now(),
@@ -3702,15 +4425,9 @@ function saveNewSession(patientId) {
     specialistName: document.getElementById('mSesSpecialist').value,
     activesApplied: document.getElementById('mSesActives').value.trim(),
     notes: document.getElementById('mSesNotes').value.trim(),
-    improvementScore: document.getElementById('mSesResult').value.trim()
+    improvementScore: document.getElementById('mSesResult').value.trim(),
+    productsUsed
   });
-
-  if (useSupplies && Array.isArray(trat.suppliesUsed)) {
-    trat.suppliesUsed.forEach(u => {
-      const inv = state.inventory.find(i => i.id === u.inventoryId);
-      if (inv) inv.stock = Math.max(0, inv.stock - u.qty);
-    });
-  }
 
   if (charge) {
     state.finances.unshift({

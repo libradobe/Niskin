@@ -8,7 +8,12 @@ const SessionSchema = new mongoose.Schema({
   specialistName: { type: String, required: true },
   activesApplied: { type: String, default: '' },
   notes: { type: String, default: '' },
-  improvementScore: { type: String, default: '85%' }
+  improvementScore: { type: String, default: '' },
+  // Productos de cabina usados en la sesión (ya descontados del inventario)
+  productsUsed: {
+    type: [{ _id: false, inventoryId: String, name: String, qty: Number, unit: String }],
+    default: []
+  }
 }, { _id: false });
 
 // 1. Esquema de Pacientes (Expediente Clínico + Fotos Antes y Después + Rutina AM/PM)
@@ -63,6 +68,22 @@ const PatientSchema = new mongoose.Schema({
     default: []
   },
   treatmentPlan: { type: String, default: '' },
+  // Ficha técnica cosmetológica (evaluación, antecedentes, hábitos, consentimiento)
+  technicalSheet: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Mapa facial Antes/Después: marcas livianas (x, y, tipo) en lugar de fotos
+  faceMap: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Compras de productos de venta
+  purchases: {
+    type: [{
+      _id: false,
+      id: String,
+      date: String,
+      items: [{ _id: false, inventoryId: String, name: String, qty: Number, unitPrice: Number }],
+      total: Number,
+      method: String
+    }],
+    default: []
+  },
   source: { type: String, default: 'Estudio' }
 }, { timestamps: true });
 

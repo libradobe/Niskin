@@ -95,7 +95,7 @@ const I18N = {
     waProof: 'Hola, soy {name}. Reservé *{treatment}* para el *{date} a las {time}*{deposit}. ¡Gracias!',
     waProofDeposit: ' y te envío el comprobante del depósito de *{amount}*',
     myFile: 'Mi ficha', skinType: 'Biotipo de piel', wantToImprove: 'Lo que quiero mejorar', allergiesLabel: 'Alergias',
-    myProgress: 'Mi progreso', lastEvaluation: 'Última evaluación: {date} ({count} en total)', hydration: 'Hidratación', toneUniformity: 'Uniformidad del tono', texturePores: 'Textura y poros', blemishControl: 'Control de imperfecciones',
+    faceMapTitle: 'Mi mapa facial', before: 'Antes', after: 'Después', myProgress: 'Mi progreso', lastEvaluation: 'Última evaluación: {date} ({count} en total)', hydration: 'Hidratación', toneUniformity: 'Uniformidad del tono', texturePores: 'Textura y poros', blemishControl: 'Control de imperfecciones',
     routine: 'Mi rutina en casa', morning: '☀️ Mañana', night: '🌙 Noche', sessions: 'Mis sesiones', actives: 'Activos: {value}',
     noSessions: 'Después de tu primera evaluación verás aquí tu rutina y tu progreso.',
     status: { 'Confirmada': 'Confirmada', 'Pendiente Depósito': 'Pendiente de depósito', 'Completada': 'Completada', 'Cancelada': 'Cancelada' }
@@ -150,7 +150,7 @@ const I18N = {
     waProof: 'Hi, this is {name}. I booked *{treatment}* for *{date} at {time}*{deposit}. Thank you!',
     waProofDeposit: ' and here is the receipt for the *{amount}* deposit',
     myFile: 'My profile', skinType: 'Skin type', wantToImprove: 'What I want to improve', allergiesLabel: 'Allergies',
-    myProgress: 'My progress', lastEvaluation: 'Last assessment: {date} ({count} in total)', hydration: 'Hydration', toneUniformity: 'Even skin tone', texturePores: 'Texture and pores', blemishControl: 'Blemish control',
+    faceMapTitle: 'My face map', before: 'Before', after: 'After', myProgress: 'My progress', lastEvaluation: 'Last assessment: {date} ({count} in total)', hydration: 'Hydration', toneUniformity: 'Even skin tone', texturePores: 'Texture and pores', blemishControl: 'Blemish control',
     routine: 'My home routine', morning: '☀️ Morning', night: '🌙 Night', sessions: 'My sessions', actives: 'Actives: {value}',
     noSessions: 'After your first assessment you will see your routine and progress here.',
     status: { 'Confirmada': 'Confirmed', 'Pendiente Depósito': 'Pending deposit', 'Completada': 'Completed', 'Cancelada': 'Cancelled' }
@@ -928,6 +928,29 @@ async function cancelAppointment(id) {
 // ---------------------------------------------------------------------------
 // Mi piel
 // ---------------------------------------------------------------------------
+function renderClientFaceMap(p) {
+  const fm = p.faceMap || {};
+  const before = fm.before?.markers || [];
+  const after = fm.after?.markers || [];
+  if (!window.NiskinFaceMap || (!before.length && !after.length)) return '';
+  const side = (markers, title, date) => `
+    <div class="fm-side">
+      <div class="fm-side-head"><strong>${esc(title)}</strong><span>${date ? esc(parseISODate(date).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })) : ''}</span></div>
+      ${NiskinFaceMap.faceSVG(markers, { label: title })}
+    </div>
+  `;
+  return `
+    <section class="cp-card">
+      <h2>${esc(t('faceMapTitle'))}</h2>
+      <div class="fm-compare">
+        ${side(before, t('before'), fm.before?.date)}
+        ${side(after, t('after'), fm.after?.date)}
+      </div>
+      ${NiskinFaceMap.legendHTML(before, after, lang())}
+    </section>
+  `;
+}
+
 function renderSkinTab() {
   const p = cp.data.profile;
   const metricLabels = {
@@ -949,6 +972,8 @@ function renderSkinTab() {
         <li><span>${esc(t('allergiesLabel'))}</span><strong>${esc(p.allergies)}</strong></li>
       </ul>
     </section>
+
+    ${renderClientFaceMap(p)}
 
     ${metrics.length ? `
       <section class="cp-card">

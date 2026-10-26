@@ -60,7 +60,7 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 // Servir solo los archivos públicos del frontend (nunca server.js, modelos ni configuración)
 const PUBLIC_FILES = [
   'index.html', 'panel.html', 'clientes.html', 'styles.css', 'clientes.css', 'landing.css', 'app.js', 'clientes.js', 'landing.js', 'data.js',
-  'config.js', 'theme-guard.js', 'notificaciones.js', 'sw.js', 'manifest-panel.webmanifest', 'manifest-clientes.webmanifest'
+  'config.js', 'theme-guard.js', 'notificaciones.js', 'facemap.js', 'sw.js', 'manifest-panel.webmanifest', 'manifest-clientes.webmanifest'
 ];
 PUBLIC_FILES.forEach(file => {
   app.get(`/${file}`, (req, res) => res.sendFile(path.join(__dirname, file)));
@@ -307,6 +307,12 @@ function toClientProfile(patient) {
     homeRoutineAM: patient.homeRoutineAM,
     homeRoutinePM: patient.homeRoutinePM,
     metrics: patient.metrics,
+    // Mapa facial sin las notas internas del equipo
+    faceMap: ['before', 'after'].reduce((acc, side) => {
+      const map = patient.faceMap && patient.faceMap[side];
+      if (map && Array.isArray(map.markers)) acc[side] = { date: map.date || '', markers: map.markers.slice(0, 300) };
+      return acc;
+    }, {}),
     progressLog: (patient.progressLog || []).map(e => ({
       date: e.date,
       hydration: e.hydration,
