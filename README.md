@@ -78,7 +78,12 @@ En **Configuración** (administradoras y cosmetólogas):
 
 **Expedientes:** cada ficha permite **editar los datos** de la paciente (contacto, edad, biotipo, fototipo, motivo y alergias), registrar **evaluaciones** de 4 indicadores de la piel (0–100) con fecha y observaciones, ver la **tendencia** de cada indicador desde la primera evaluación, escribir el **plan de tratamiento**, editar la rutina en casa, **editar o eliminar sesiones** y ver sus citas. La app ya no guarda fotos (para no llenar MongoDB); las que existían quedan en la base de datos sin mostrarse.
 
-**Ficha técnica:** en cada expediente, evaluación de la piel (grosor, textura, oleosidad, hidratación, poros, sensibilidad, grado de acné y hallazgos), antecedentes médicos con alertas (embarazo, isotretinoína, anticoagulantes…), hábitos, contraindicaciones y consentimiento informado. Botón **Imprimir** para una versión con espacio para firmas.
+**Ficha técnica:** igual al formulario en papel del estudio ("Ficha clínica facial"), con "paciente" en lugar de "cliente":
+- **Hoja 1, Ficha clínica y anamnesis facial:** información del paciente (nombre, fecha de nacimiento/edad, teléfono, correo, dirección, ocupación, fecha de evaluación, Nº de ficha, motivo de consulta), motivo y antecedentes relevantes, historial estético y cuidado de la piel, y hábitos que pueden influir en la piel.
+- **Hoja 2, Análisis de la piel y registro de tratamiento:** evaluación profesional (Características / Valoración), mapa facial y observaciones, plan de tratamiento cosmético (se llena solo con las sesiones registradas), recomendaciones domiciliarias y consentimiento y firmas.
+- Las casillas se marcan tocándolas (un segundo toque las desmarca). Nombre, teléfono, correo, motivo, alergias y rutina se comparten con el resto del expediente; la fecha de nacimiento calcula la edad, y el tipo de piel y el fototipo actualizan la ficha de la paciente.
+- Alertas visibles en el expediente: tratamiento médico, embarazo, reacciones a cosméticos, condiciones de cicatrización, retinoides/ácidos y alergias.
+- **Imprimir** genera las dos hojas en tamaño carta con casillas ☐/☑, la tabla de sesiones y las líneas de firma del paciente y de la profesional.
 
 **Mapa facial antes / después:** un rostro dibujado donde se marcan acné, manchas, arrugas, poros, rojez, cicatrices y zonas secas tocando la figura. Tiene pestañas "Antes" y "Después", "Copiar marcas de Antes", deshacer y una leyenda con el conteo (ej. Acné 6 → 2). Se guarda como coordenadas, no como imagen, así casi no ocupa espacio. La clienta lo ve en "Mi piel" sin las notas internas.
 

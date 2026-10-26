@@ -2330,6 +2330,131 @@ select.form-control,
   grid-column: 1 / -1;
 }
 
+.tech-page-title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--gold-hover);
+  border-bottom: 2px solid var(--gold-border);
+  padding-bottom: 6px;
+  margin-top: 6px;
+}
+
+.tech-field {
+  border: none;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.tech-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.tech-field legend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.tech-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tech-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.tech-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tech-option span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  font-size: 0.82rem;
+  user-select: none;
+}
+
+.tech-option span::before {
+  content: '☐';
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.tech-option input:checked + span {
+  background: var(--gold-soft);
+  border-color: var(--gold-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.tech-option input:checked + span::before {
+  content: '☑';
+  color: var(--gold-primary);
+}
+
+.tech-option input:focus-visible + span {
+  outline: 2px solid var(--gold-primary);
+  outline-offset: 2px;
+}
+
+.tech-detail {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.tech-two-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+
+.tech-two-cols > div {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tech-col-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold-hover);
+}
+
+.tech-consent {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.tech-head-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
 /* Vista Ventas */
 .sales-periods {
   display: flex;
@@ -3322,7 +3447,8 @@ textarea.form-control {
 
 @media (max-width: 480px) {
   .tech-fields,
-  .tech-checks {
+  .tech-checks,
+  .tech-two-cols {
     grid-template-columns: 1fr;
   }
   .picker-add {

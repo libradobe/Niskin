@@ -2701,243 +2701,536 @@ function saveFaceMap() {
 }
 
 // ============================================================================
-// EXPEDIENTE: FICHA TÉCNICA COSMETOLÓGICA
+// EXPEDIENTE: FICHA TÉCNICA (igual al formulario en papel del estudio)
+// Hoja 1: Ficha clínica y anamnesis facial • Hoja 2: Análisis de la piel y registro de tratamiento
+// Tipos: text, textarea, date, radio (una opción), checks (varias), check, patient (dato del expediente)
 // ============================================================================
-const TECH_SHEET = [
+const YES_NO = ['Sí', 'No'];
+
+const TECH_SHEET_PAGES = [
   {
-    title: 'Evaluación de la piel',
-    fields: [
-      { k: 'grosor', label: 'Grosor', type: 'select', options: ['Fina', 'Media', 'Gruesa'] },
-      { k: 'textura', label: 'Textura', type: 'select', options: ['Lisa', 'Irregular', 'Áspera'] },
-      { k: 'oleosidad', label: 'Oleosidad', type: 'select', options: ['Seca', 'Normal', 'Mixta', 'Grasa'] },
-      { k: 'hidratacion', label: 'Hidratación', type: 'select', options: ['Normal', 'Deshidratada', 'Muy deshidratada'] },
-      { k: 'poros', label: 'Poros', type: 'select', options: ['Cerrados', 'Dilatados en zona T', 'Dilatados generalizados'] },
-      { k: 'sensibilidad', label: 'Sensibilidad', type: 'select', options: ['Baja', 'Media', 'Alta'] },
-      { k: 'acneGrado', label: 'Acné', type: 'select', options: ['No aplica', 'Grado I (comedones)', 'Grado II (pápulas)', 'Grado III (pústulas)', 'Grado IV (nódulos / quistes)'] },
-      { k: 'hallazgos', label: 'Hallazgos', type: 'checks', options: ['Manchas / hiperpigmentación', 'Melasma', 'Rosácea / eritema', 'Arrugas / líneas de expresión', 'Flacidez', 'Cicatrices de acné', 'Telangiectasias', 'Ojeras', 'Milium', 'Queratosis'] }
+    title: 'Ficha clínica y anamnesis facial',
+    subtitle: 'Uso profesional',
+    sections: [
+      {
+        title: 'Información del paciente',
+        fields: [
+          { k: 'nombre', label: 'Nombre y apellido', type: 'patient', field: 'name' },
+          { k: 'fechaNacimiento', label: 'Fecha de nacimiento', type: 'date' },
+          { k: 'telefono', label: 'Teléfono / WhatsApp', type: 'patient', field: 'phone' },
+          { k: 'correo', label: 'Correo electrónico', type: 'patient', field: 'email' },
+          { k: 'direccion', label: 'Dirección / Sector / Ciudad', type: 'text' },
+          { k: 'ocupacion', label: 'Ocupación', type: 'text' },
+          { k: 'fechaEvaluacion', label: 'Fecha de evaluación', type: 'date' },
+          { k: 'numeroFicha', label: 'Nº de ficha', type: 'text' },
+          { k: 'motivoConsulta', label: 'Motivo de consulta', type: 'patient', field: 'mainConcern', wide: true }
+        ]
+      },
+      {
+        title: 'Motivo y antecedentes relevantes',
+        fields: [
+          { k: 'deseaMejorar', label: '¿Qué desea mejorar?', type: 'checks', options: ['Acné', 'Manchas', 'Hidratación', 'Textura', 'Poros', 'Sensibilidad', 'Envejecimiento', 'Otro'], detail: { k: 'deseaMejorarOtro', label: 'Otro', when: 'Otro' } },
+          { k: 'alergias', label: 'Alergias conocidas', type: 'patient', field: 'allergies' },
+          { k: 'medicamentos', label: 'Medicamentos de uso habitual', type: 'text' },
+          { k: 'tratamientoMedico', label: '¿Está bajo tratamiento médico actualmente?', type: 'radio', options: YES_NO, warnWhen: 'Sí', detail: { k: 'tratamientoMedicoCual', label: 'Si respondió sí, indique cuál', when: 'Sí' } },
+          { k: 'embarazo', label: '¿Embarazo o sospecha de embarazo?', type: 'radio', options: ['Sí', 'No', 'No aplica'], warnWhen: 'Sí' },
+          { k: 'reacciones', label: '¿Ha presentado reacciones a cosméticos/productos?', type: 'radio', options: YES_NO, warnWhen: 'Sí' },
+          { k: 'condicionPiel', label: '¿Tiene alguna condición que afecte la piel o cicatrización?', type: 'radio', options: YES_NO, warnWhen: 'Sí', detail: { k: 'condicionPielDetalle', label: 'Especifique', when: 'Sí' } }
+        ]
+      },
+      {
+        title: 'Historial estético y cuidado de la piel',
+        fields: [
+          { k: 'ultimaLimpieza', label: 'Última limpieza facial', type: 'text' },
+          { k: 'peeling', label: 'Peeling reciente', type: 'radio', options: YES_NO, detail: { k: 'peelingFecha', label: 'Fecha', type: 'date', when: 'Sí' } },
+          { k: 'laser', label: 'Láser/depilación reciente', type: 'radio', options: YES_NO, detail: { k: 'laserFecha', label: 'Fecha', type: 'date', when: 'Sí' } },
+          { k: 'otroTratamiento', label: 'Otro tratamiento facial reciente', type: 'text' },
+          { k: 'usaRutina', label: '¿Usa rutina de skincare?', type: 'radio', options: YES_NO },
+          { k: 'productosRutina', label: 'Pasos de su rutina', type: 'checks', options: ['Limpiador', 'Tónico', 'Sérum', 'Hidratante', 'Protector solar'] },
+          { k: 'productosQueUtiliza', label: 'Productos que utiliza', type: 'text' },
+          { k: 'retinoides', label: '¿Usa retinoides/ácidos/exfoliantes?', type: 'radio', options: YES_NO, warnWhen: 'Sí' }
+        ]
+      },
+      {
+        title: 'Hábitos que pueden influir en la piel',
+        fields: [
+          { k: 'alimentacion', label: 'Alimentación', type: 'radio', options: ['Equilibrada', 'Variable', 'Alta en ultraprocesados'] },
+          { k: 'agua', label: 'Agua diaria', type: 'radio', options: ['Poca', 'Moderada', 'Suficiente'] },
+          { k: 'sueno', label: 'Horas de sueño', type: 'radio', options: ['<5', '5–7', '7–9', '>9'] },
+          { k: 'actividad', label: 'Actividad física', type: 'radio', options: ['Frecuente', 'Ocasional', 'No realiza'] },
+          { k: 'estres', label: 'Estrés', type: 'radio', options: ['Bajo', 'Medio', 'Alto'] },
+          { k: 'tabaco', label: 'Tabaco', type: 'radio', options: ['No', 'Ocasional', 'Frecuente'] },
+          { k: 'alcohol', label: 'Alcohol', type: 'radio', options: ['No', 'Ocasional', 'Frecuente'] },
+          { k: 'exposicionSolar', label: 'Exposición solar', type: 'radio', options: ['Baja', 'Moderada', 'Alta'], extra: { k: 'usaFps', label: 'Usa FPS' } }
+        ]
+      }
     ]
   },
   {
-    title: 'Antecedentes médicos',
-    fields: [
-      { k: 'condiciones', label: 'Condiciones a tener en cuenta', type: 'checks', warn: true, options: ['Embarazo o lactancia', 'Isotretinoína (últimos 6 meses)', 'Anticoagulantes', 'Diabetes', 'Herpes labial recurrente', 'Marcapasos o implantes metálicos', 'Enfermedad autoinmune', 'Tendencia a queloides', 'Epilepsia', 'Cáncer de piel (actual o previo)'] },
-      { k: 'enfermedades', label: 'Otras enfermedades', type: 'text' },
-      { k: 'medicamentos', label: 'Medicamentos actuales', type: 'text' },
-      { k: 'cirugias', label: 'Cirugías o procedimientos estéticos', type: 'text' },
-      { k: 'tratamientosPrevios', label: 'Tratamientos faciales previos', type: 'text' }
-    ]
-  },
-  {
-    title: 'Hábitos',
-    fields: [
-      { k: 'sol', label: 'Exposición al sol', type: 'select', options: ['Baja', 'Moderada', 'Alta'] },
-      { k: 'protector', label: 'Protector solar', type: 'select', options: ['Diario', 'A veces', 'No usa'] },
-      { k: 'tabaco', label: 'Fuma', type: 'select', options: ['No', 'Sí'] },
-      { k: 'agua', label: 'Agua al día', type: 'select', options: ['Menos de 1 litro', '1 a 2 litros', 'Más de 2 litros'] },
-      { k: 'sueno', label: 'Horas de sueño', type: 'select', options: ['Menos de 6 h', '6 a 8 h', 'Más de 8 h'] },
-      { k: 'rutinaActual', label: 'Rutina de cuidado actual', type: 'textarea' }
-    ]
-  },
-  {
-    title: 'Observaciones y consentimiento',
-    fields: [
-      { k: 'contraindicaciones', label: 'Contraindicaciones', type: 'textarea' },
-      { k: 'observaciones', label: 'Observaciones del especialista', type: 'textarea' },
-      { k: 'consentimiento', label: 'Consentimiento informado firmado', type: 'check' },
-      { k: 'consentimientoFecha', label: 'Fecha del consentimiento', type: 'date' }
+    title: 'Análisis de la piel y registro de tratamiento',
+    sections: [
+      {
+        title: 'Evaluación profesional de la piel',
+        columns: ['Características', 'Valoración'],
+        fields: [
+          { k: 'tipoPiel', label: 'Tipo de piel', type: 'radio', col: 0, options: ['Seca', 'Normal', 'Mixta', 'Grasa', 'Acneica'] },
+          { k: 'estado', label: 'Estado', type: 'checks', col: 0, options: ['Deshidratada', 'Sensibilizada', 'Oleosa', 'Equilibrada'] },
+          { k: 'apariencia', label: 'Apariencia', type: 'checks', col: 0, options: ['Opaca', 'Brillante', 'Uniforme', 'Irregular'] },
+          { k: 'textura', label: 'Textura', type: 'checks', col: 0, options: ['Suave', 'Áspera', 'Engrosada', 'Irregular'] },
+          { k: 'sensibilidad', label: 'Sensibilidad', type: 'radio', col: 0, options: ['Baja', 'Media', 'Alta'] },
+          { k: 'tamanoPoro', label: 'Tamaño de poro', type: 'radio', col: 0, options: ['Pequeño', 'Medio', 'Grande'] },
+          { k: 'fototipo', label: 'Fototipo', type: 'radio', col: 0, options: ['I', 'II', 'III', 'IV', 'V', 'VI'] },
+          { k: 'acne', label: 'Acné', type: 'checks', col: 1, options: ['No', 'Comedones', 'Pápulas', 'Pústulas'] },
+          { k: 'localizacion', label: 'Localización', type: 'checks', col: 1, options: ['Frente', 'Nariz', 'Mejillas', 'Mentón', 'Mandíbula'] },
+          { k: 'pigmentacion', label: 'Pigmentación', type: 'checks', col: 1, options: ['No', 'Melasma', 'Hiperpigmentación', 'Efélides'] },
+          { k: 'deshidratacion', label: 'Deshidratación', type: 'radio', col: 1, options: ['Superficial', 'Profunda', 'No'] },
+          { k: 'lineas', label: 'Líneas', type: 'checks', col: 1, options: ['No', 'Finas', 'Profundas', 'Expresión'] },
+          { k: 'vasculares', label: 'Alteraciones vasculares', type: 'checks', col: 1, options: ['No', 'Eritema', 'Telangiectasias'] },
+          { k: 'cicatrices', label: 'Cicatrices post-acné', type: 'radio', col: 1, options: ['No', 'Sí'], detail: { k: 'cicatricesTipo', label: 'Tipo', when: 'Sí' } }
+        ]
+      },
+      {
+        title: 'Mapa facial y observaciones',
+        fields: [
+          { k: 'zonasHallazgos', label: 'Zonas con hallazgos / lesiones / manchas / comedones', type: 'checks', options: ['Frente', 'Nariz', 'Mejilla derecha', 'Mejilla izquierda', 'Mentón', 'Mandíbula'] },
+          { k: 'observacionesMapa', label: 'Observaciones', type: 'textarea' }
+        ]
+      },
+      {
+        title: 'Plan de tratamiento cosmético',
+        sessionsTable: true,
+        fields: []
+      },
+      {
+        title: 'Recomendaciones domiciliarias',
+        fields: [
+          { k: 'rutinaAM', label: 'Rutina indicada — día (AM)', type: 'patient', field: 'homeRoutineAM', multiline: true },
+          { k: 'rutinaPM', label: 'Rutina indicada — noche (PM)', type: 'patient', field: 'homeRoutinePM', multiline: true },
+          { k: 'frecuencia', label: 'Frecuencia / próxima cita', type: 'text' },
+          { k: 'indicacionesEspeciales', label: 'Indicaciones especiales', type: 'textarea' }
+        ]
+      },
+      {
+        title: 'Consentimiento y firmas',
+        consent: true,
+        fields: [
+          { k: 'consentimiento', label: 'El paciente leyó y aceptó la declaración', type: 'check' },
+          { k: 'consentimientoFecha', label: 'Fecha', type: 'date' }
+        ]
+      }
     ]
   }
 ];
 
-function techFieldValueText(field, value) {
-  if (field.type === 'checks') return (value || []).join(', ');
-  if (field.type === 'check') return value ? 'Sí' : 'No';
-  if (field.type === 'date') return value ? formatDateLong(value) : '';
-  return value || '';
+const TECH_CONSENT_TEXT = 'Declaro que la información proporcionada es verdadera y completa, y que he informado sobre alergias, medicamentos y condiciones relevantes para mi atención cosmética. Comprendo que los tratamientos realizados son de carácter estético/cosmético y que se me indicarán las recomendaciones correspondientes.';
+
+const TECH_FIELDS = TECH_SHEET_PAGES.flatMap(page => page.sections.flatMap(s => s.fields));
+
+function techValue(p, ts, f) {
+  return f.type === 'patient' ? (p[f.field] || '') : ts[f.k];
+}
+
+function ageFromBirthDate(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age--;
+  return age >= 0 && age <= 120 ? age : null;
+}
+
+function techValueText(p, ts, f) {
+  const v = techValue(p, ts, f);
+  let text = '';
+  if (f.type === 'checks') text = (v || []).join(', ');
+  else if (f.type === 'check') text = v ? 'Sí' : '';
+  else if (f.type === 'date') text = v ? formatDateShort(v) : '';
+  else text = v || '';
+  if (f.detail && ts[f.detail.k] && (f.type === 'checks' ? (v || []).includes(f.detail.when) : v === f.detail.when)) {
+    const detailVal = f.detail.type === 'date' ? formatDateShort(ts[f.detail.k]) : ts[f.detail.k];
+    text += ` (${f.detail.label}: ${detailVal})`;
+  }
+  if (f.extra && ts[f.extra.k]) text += `${text ? ' • ' : ''}${f.extra.label}`;
+  return text;
+}
+
+// Alertas: respuestas que requieren precaución antes de un tratamiento
+function techWarnings(p, ts) {
+  const warns = TECH_FIELDS
+    .filter(f => f.warnWhen && ts[f.k] === f.warnWhen)
+    .map(f => {
+      const short = {
+        tratamientoMedico: 'Bajo tratamiento médico',
+        embarazo: 'Embarazo o sospecha de embarazo',
+        reacciones: 'Reacciones previas a cosméticos',
+        condicionPiel: 'Condición que afecta piel/cicatrización',
+        retinoides: 'Usa retinoides/ácidos/exfoliantes'
+      }[f.k] || f.label;
+      const detail = f.detail && ts[f.detail.k] ? `: ${ts[f.detail.k]}` : '';
+      return short + detail;
+    });
+  if (p.allergies && !/^ningun/i.test(p.allergies)) warns.unshift(`Alergias: ${p.allergies}`);
+  return warns;
+}
+
+function techSheetFilled(ts) {
+  return TECH_FIELDS.some(f => {
+    if (f.type === 'patient') return false;
+    const v = ts[f.k];
+    return Array.isArray(v) ? v.length : Boolean(v);
+  });
 }
 
 function renderTechSheetSection(p) {
   const ts = p.technicalSheet || {};
-  const filled = TECH_SHEET.flatMap(s => s.fields).some(f => {
-    const v = ts[f.k];
-    return Array.isArray(v) ? v.length : Boolean(v);
-  });
-  const flags = ts.condiciones || [];
-  const consent = ts.consentimiento
-    ? `<span class="status-pill status-confirmed"><span class="dot"></span>Consentimiento firmado${ts.consentimientoFecha ? ` • ${escapeHTML(formatDateShort(ts.consentimientoFecha))}` : ''}</span>`
-    : '<span class="status-pill status-pending"><span class="dot"></span>Consentimiento pendiente</span>';
-  if (!filled) {
+  if (!techSheetFilled(ts)) {
     return `
       <div class="progress-empty">
-        <p>Completa la ficha técnica: evaluación de la piel, antecedentes médicos, hábitos y consentimiento informado.</p>
+        <p>Completa la ficha clínica: información del paciente, antecedentes, historial estético, hábitos, evaluación profesional de la piel y consentimiento.</p>
         <button class="btn-gold btn-sm" onclick="openTechSheetModal('${escapeHTML(p.id)}')">＋ Completar ficha técnica</button>
       </div>
     `;
   }
-  const keyFields = ['grosor', 'textura', 'oleosidad', 'hidratacion', 'poros', 'sensibilidad', 'acneGrado', 'sol', 'protector'];
-  const all = TECH_SHEET.flatMap(s => s.fields);
+  const warns = techWarnings(p, ts);
+  const keys = ['tipoPiel', 'fototipo', 'sensibilidad', 'tamanoPoro', 'estado', 'acne', 'pigmentacion', 'deshidratacion', 'lineas', 'vasculares'];
+  const consent = ts.consentimiento
+    ? `<span class="status-pill status-confirmed"><span class="dot"></span>Consentimiento firmado${ts.consentimientoFecha ? ` • ${escapeHTML(formatDateShort(ts.consentimientoFecha))}` : ''}</span>`
+    : '<span class="status-pill status-pending"><span class="dot"></span>Consentimiento pendiente</span>';
   return `
     <div class="tech-summary">
-      ${consent}
-      ${flags.length ? `<div class="tech-flags">${flags.map(f => `<span class="tech-flag">⚠️ ${escapeHTML(f)}</span>`).join('')}</div>` : ''}
+      <div class="tech-head-line">
+        ${consent}
+        ${ts.numeroFicha ? `<span class="skin-tag">Ficha Nº ${escapeHTML(ts.numeroFicha)}</span>` : ''}
+        ${ts.fechaEvaluacion ? `<span class="skin-tag">Evaluada ${escapeHTML(formatDateShort(ts.fechaEvaluacion))}</span>` : ''}
+      </div>
+      ${warns.length ? `<div class="tech-flags">${warns.map(w => `<span class="tech-flag">⚠️ ${escapeHTML(w)}</span>`).join('')}</div>` : ''}
       <dl class="tech-grid">
-        ${keyFields.map(k => all.find(f => f.k === k)).filter(f => ts[f.k]).map(f => `
-          <div><dt>${escapeHTML(f.label)}</dt><dd>${escapeHTML(techFieldValueText(f, ts[f.k]))}</dd></div>
+        ${keys.map(k => TECH_FIELDS.find(f => f.k === k)).map(f => ({ f, text: techValueText(p, ts, f) })).filter(x => x.text).map(({ f, text }) => `
+          <div><dt>${escapeHTML(f.label)}</dt><dd>${escapeHTML(text)}</dd></div>
         `).join('')}
       </dl>
-      ${(ts.hallazgos || []).length ? `<p class="tech-line"><strong>Hallazgos:</strong> ${escapeHTML(ts.hallazgos.join(', '))}</p>` : ''}
+      ${(ts.deseaMejorar || []).length ? `<p class="tech-line"><strong>Desea mejorar:</strong> ${escapeHTML(techValueText(p, ts, TECH_FIELDS.find(f => f.k === 'deseaMejorar')))}</p>` : ''}
       ${ts.medicamentos ? `<p class="tech-line"><strong>Medicamentos:</strong> ${escapeHTML(ts.medicamentos)}</p>` : ''}
-      ${ts.contraindicaciones ? `<p class="tech-line tech-warn"><strong>Contraindicaciones:</strong> ${escapeHTML(ts.contraindicaciones)}</p>` : ''}
+      ${(ts.zonasHallazgos || []).length ? `<p class="tech-line"><strong>Zonas con hallazgos:</strong> ${escapeHTML(ts.zonasHallazgos.join(', '))}</p>` : ''}
+      ${ts.indicacionesEspeciales ? `<p class="tech-line"><strong>Indicaciones especiales:</strong> ${escapeHTML(ts.indicacionesEspeciales)}</p>` : ''}
       ${ts.updatedAt ? `<p class="tech-meta">Actualizada ${escapeHTML(formatDateShort(ts.updatedAt))}${ts.updatedBy ? ` por ${escapeHTML(ts.updatedBy)}` : ''}</p>` : ''}
     </div>
   `;
 }
 
-function techFieldInput(f, ts) {
+// ---------------------------------------------------------------------------
+// Formulario
+// ---------------------------------------------------------------------------
+function techDetailInput(f, ts, visible) {
+  if (!f.detail) return '';
+  return `
+    <div class="tech-detail" id="ts_${f.detail.k}_box" ${visible ? '' : 'hidden'}>
+      <label for="ts_${f.detail.k}">${escapeHTML(f.detail.label)}</label>
+      <input id="ts_${f.detail.k}" type="${f.detail.type === 'date' ? 'date' : 'text'}" class="form-control" maxlength="200" value="${escapeHTML(ts[f.detail.k] || '')}">
+    </div>
+  `;
+}
+
+function techFieldInput(p, ts, f) {
   const id = `ts_${f.k}`;
-  const v = ts[f.k];
-  if (f.type === 'select') {
+  const v = techValue(p, ts, f);
+  const toggleDetail = f.detail ? `onchange="toggleTechDetail('${f.k}')"` : '';
+  if (f.type === 'radio' || f.type === 'checks') {
+    const multi = f.type === 'checks';
+    const detailVisible = f.detail && (multi ? (v || []).includes(f.detail.when) : v === f.detail.when);
     return `
-      <div class="form-group">
-        <label for="${id}">${escapeHTML(f.label)}</label>
-        <select id="${id}" class="form-control">
-          <option value="">—</option>
-          ${f.options.map(o => `<option ${o === v ? 'selected' : ''}>${escapeHTML(o)}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
-  if (f.type === 'checks') {
-    return `
-      <fieldset class="form-group tech-checks">
+      <fieldset class="tech-field ${f.wide ? 'is-wide' : ''}">
         <legend>${escapeHTML(f.label)}</legend>
-        ${f.options.map((o, i) => `
-          <label class="settings-switch"><input type="checkbox" name="${id}" value="${escapeHTML(o)}" ${(v || []).includes(o) ? 'checked' : ''}> <span>${escapeHTML(o)}</span></label>
-        `).join('')}
+        <div class="tech-options">
+          ${f.options.map(o => `
+            <label class="tech-option">
+              <input type="${multi ? 'checkbox' : 'radio'}" name="${id}" value="${escapeHTML(o)}" ${(multi ? (v || []).includes(o) : v === o) ? 'checked' : ''} ${toggleDetail}
+                     ${multi ? '' : `onclick="techRadioToggle(this)"`}>
+              <span>${escapeHTML(o)}</span>
+            </label>
+          `).join('')}
+          ${f.extra ? `
+            <label class="tech-option tech-option-extra">
+              <input type="checkbox" id="ts_${f.extra.k}" ${ts[f.extra.k] ? 'checked' : ''}>
+              <span>${escapeHTML(f.extra.label)}</span>
+            </label>
+          ` : ''}
+        </div>
+        ${techDetailInput(f, ts, detailVisible)}
       </fieldset>
     `;
   }
   if (f.type === 'check') {
-    return `<label class="settings-switch"><input type="checkbox" id="${id}" ${v ? 'checked' : ''}> <span>${escapeHTML(f.label)}</span></label>`;
+    return `<label class="settings-switch tech-field is-wide"><input type="checkbox" id="${id}" ${v ? 'checked' : ''}> <span>${escapeHTML(f.label)}</span></label>`;
   }
-  if (f.type === 'textarea') {
+  if (f.type === 'textarea' || f.multiline) {
     return `
-      <div class="form-group">
+      <div class="form-group tech-field is-wide">
         <label for="${id}">${escapeHTML(f.label)}</label>
-        <textarea id="${id}" class="form-control" rows="2" maxlength="600">${escapeHTML(v || '')}</textarea>
+        <textarea id="${id}" class="form-control" rows="3" maxlength="800">${escapeHTML(v || '')}</textarea>
       </div>
     `;
   }
   return `
-    <div class="form-group">
+    <div class="form-group tech-field ${f.wide ? 'is-wide' : ''}">
       <label for="${id}">${escapeHTML(f.label)}</label>
-      <input id="${id}" type="${f.type === 'date' ? 'date' : 'text'}" class="form-control" maxlength="200" value="${escapeHTML(v || '')}">
+      <input id="${id}" type="${f.type === 'date' ? 'date' : (f.field === 'email' ? 'email' : 'text')}" class="form-control" maxlength="200" value="${escapeHTML(v || '')}"
+             ${f.k === 'fechaNacimiento' ? 'oninput="updateTechAge()"' : ''}>
+      ${f.k === 'fechaNacimiento' ? `<span class="admin-gate-hint" id="tsAgeHint" style="text-align:left;">${ageFromBirthDate(v) !== null ? `Edad: ${ageFromBirthDate(v)} años` : (p.age ? `Edad registrada: ${escapeHTML(p.age)} años` : '')}</span>` : ''}
     </div>
   `;
+}
+
+// Permite desmarcar un radio tocándolo de nuevo (como dejar la casilla en blanco en papel)
+function techRadioToggle(input) {
+  if (input.dataset.wasChecked === '1') {
+    input.checked = false;
+    input.dataset.wasChecked = '0';
+  } else {
+    document.querySelectorAll(`input[name="${input.name}"]`).forEach(r => { r.dataset.wasChecked = '0'; });
+    input.dataset.wasChecked = '1';
+  }
+  const key = input.name.replace(/^ts_/, '');
+  toggleTechDetail(key);
+}
+
+function toggleTechDetail(key) {
+  const f = TECH_FIELDS.find(x => x.k === key);
+  if (!f || !f.detail) return;
+  const box = document.getElementById(`ts_${f.detail.k}_box`);
+  const selected = [...document.querySelectorAll(`input[name="ts_${key}"]:checked`)].map(i => i.value);
+  if (box) box.hidden = !selected.includes(f.detail.when);
+}
+
+function updateTechAge() {
+  const age = ageFromBirthDate(document.getElementById('ts_fechaNacimiento')?.value);
+  const hint = document.getElementById('tsAgeHint');
+  if (hint) hint.textContent = age !== null ? `Edad: ${age} años` : '';
 }
 
 function openTechSheetModal(patientId) {
   const p = state.patients.find(x => x.id === patientId);
   if (!p) return;
-  const ts = p.technicalSheet || {};
+  const ts = { ...(p.technicalSheet || {}) };
+  if (!ts.fechaEvaluacion) ts.fechaEvaluacion = toISODate(new Date());
+  if (!ts.fototipo) {
+    const m = /\b(VI|IV|V|III|II|I)\b/.exec(p.fitzpatrick || '');
+    if (m) ts.fototipo = m[1];
+  }
   openModalWithHTML(
     `Ficha técnica — ${p.name}`,
-    `
-      <div class="form-row">
-        <div class="form-group">
-          <label for="ts_biotype">Biotipo de piel</label>
-          <input id="ts_biotype" class="form-control" list="tsSkinTypes" maxlength="60" value="${escapeHTML(p.skinBiotype || '')}">
-          <datalist id="tsSkinTypes">${SKIN_TYPES.map(o => `<option value="${escapeHTML(o)}">`).join('')}</datalist>
-        </div>
-        <div class="form-group">
-          <label for="ts_fitz">Fototipo</label>
-          <select id="ts_fitz" class="form-control">
-            ${(FITZPATRICK.includes(p.fitzpatrick) ? FITZPATRICK : [p.fitzpatrick, ...FITZPATRICK]).map(o => `<option ${o === p.fitzpatrick ? 'selected' : ''}>${escapeHTML(o)}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      ${TECH_SHEET.map(section => `
+    TECH_SHEET_PAGES.map((page, pi) => `
+      <div class="tech-page-title">Hoja ${pi + 1}: ${escapeHTML(page.title)}</div>
+      ${page.sections.map(section => `
         <section class="tech-section">
           <h4>${escapeHTML(section.title)}</h4>
-          <div class="tech-fields">
-            ${section.fields.map(f => techFieldInput(f, ts)).join('')}
-          </div>
+          ${section.sessionsTable ? `
+            <p class="admin-gate-hint" style="text-align:left;">Se completa automáticamente con las sesiones registradas en el expediente (fecha, tratamiento, cosméticos/activos y observaciones). Se imprime como tabla.</p>
+          ` : ''}
+          ${section.consent ? `<p class="tech-consent">${escapeHTML(TECH_CONSENT_TEXT)}</p>` : ''}
+          ${section.columns ? `
+            <div class="tech-two-cols">
+              ${section.columns.map((col, ci) => `
+                <div>
+                  <p class="tech-col-title">${escapeHTML(col)}</p>
+                  ${section.fields.filter(f => f.col === ci).map(f => techFieldInput(p, ts, f)).join('')}
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <div class="tech-fields">
+              ${section.fields.map(f => techFieldInput(p, ts, f)).join('')}
+            </div>
+          `}
         </section>
       `).join('')}
-    `,
+    `).join(''),
     `
       <button class="btn-soft" onclick="closeModal()">Cancelar</button>
       <button class="btn-gold" onclick="saveTechSheet('${escapeHTML(p.id)}')">Guardar ficha</button>
     `
   );
   document.querySelector('.modal-box')?.classList.add('modal-wide');
+  document.querySelectorAll('.tech-option input[type="radio"]:checked').forEach(r => { r.dataset.wasChecked = '1'; });
 }
 
 function saveTechSheet(patientId) {
   const p = state.patients.find(x => x.id === patientId);
   if (!p) return;
-  const ts = {};
-  TECH_SHEET.flatMap(s => s.fields).forEach(f => {
+  const ts = { ...(p.technicalSheet || {}) };
+  TECH_FIELDS.forEach(f => {
     const id = `ts_${f.k}`;
+    if (f.type === 'patient') {
+      const value = String(document.getElementById(id)?.value || '').trim();
+      if (f.field === 'name' && value.length < 3) return;
+      p[f.field] = f.multiline ? value.slice(0, 800) : value.slice(0, 200);
+      return;
+    }
     if (f.type === 'checks') ts[f.k] = [...document.querySelectorAll(`input[name="${id}"]:checked`)].map(i => i.value);
+    else if (f.type === 'radio') ts[f.k] = document.querySelector(`input[name="${id}"]:checked`)?.value || '';
     else if (f.type === 'check') ts[f.k] = document.getElementById(id).checked;
-    else ts[f.k] = String(document.getElementById(id).value || '').trim().slice(0, 600);
+    else ts[f.k] = String(document.getElementById(id)?.value || '').trim().slice(0, 800);
+    if (f.detail) ts[f.detail.k] = String(document.getElementById(`ts_${f.detail.k}`)?.value || '').trim().slice(0, 200);
+    if (f.extra) ts[f.extra.k] = document.getElementById(`ts_${f.extra.k}`)?.checked || false;
   });
+
+  // Datos que también se muestran en el resto del expediente
+  p.initials = getInitials(p.name);
+  if (!p.allergies) p.allergies = 'Ninguna conocida';
+  const age = ageFromBirthDate(ts.fechaNacimiento);
+  if (age !== null) p.age = age;
+  if (ts.fototipo) p.fitzpatrick = `Fototipo ${ts.fototipo}`;
+  if (ts.tipoPiel) {
+    const extra = (ts.estado || []).filter(e => e !== 'Equilibrada');
+    p.skinBiotype = `Piel ${ts.tipoPiel}${extra.length ? ` ${extra.join(' / ').toLowerCase()}` : ''}`;
+  }
+  state.appointments.forEach(a => {
+    if (a.patientId === p.id) {
+      a.patientName = p.name;
+      a.initials = p.initials;
+    }
+  });
+
   const me = getCurrentStaff();
   ts.updatedAt = toISODate(new Date());
   ts.updatedBy = me?.isMaster ? '' : (me?.name || '');
   p.technicalSheet = ts;
-  p.skinBiotype = document.getElementById('ts_biotype').value.trim() || p.skinBiotype;
-  p.fitzpatrick = document.getElementById('ts_fitz').value || p.fitzpatrick;
   saveState();
   closeModal();
   showToast('Ficha técnica guardada.');
   renderWorkspace();
 }
 
-// Versión imprimible de la ficha técnica (con el mapa facial)
+// ---------------------------------------------------------------------------
+// Impresión: dos hojas iguales al formulario en papel, con casillas ☐ / ☑
+// ---------------------------------------------------------------------------
+function techPrintLabel(label) {
+  return /[?:]$/.test(label) ? label : `${label}:`;
+}
+
+function techPrintField(p, ts, f) {
+  const v = techValue(p, ts, f);
+  const box = on => (on ? '☑' : '☐');
+  if (f.type === 'radio' || f.type === 'checks') {
+    const multi = f.type === 'checks';
+    let html = f.options.map(o => `${box(multi ? (v || []).includes(o) : v === o)} ${escapeHTML(o)}`).join('&nbsp;&nbsp; ');
+    if (f.extra) html += `&nbsp;&nbsp; ${box(ts[f.extra.k])} ${escapeHTML(f.extra.label)}`;
+    if (f.detail) {
+      const dv = ts[f.detail.k] ? (f.detail.type === 'date' ? formatDateShort(ts[f.detail.k]) : ts[f.detail.k]) : '';
+      html += `&nbsp;&nbsp; ${escapeHTML(f.detail.label)}: <span class="line">${escapeHTML(dv)}</span>`;
+    }
+    return `<td><strong>${escapeHTML(techPrintLabel(f.label))}</strong> ${html}</td>`;
+  }
+  if (f.type === 'check') return `<td>${box(v)} ${escapeHTML(f.label)}</td>`;
+  const text = f.type === 'date' ? (v ? formatDateLong(v) : '') : (v || '');
+  const extra = f.k === 'fechaNacimiento' && ageFromBirthDate(v) !== null ? ` / ${ageFromBirthDate(v)} años` : '';
+  return `<td><strong>${escapeHTML(techPrintLabel(f.label + (f.k === 'fechaNacimiento' ? ' / Edad' : '')))}</strong> <span class="line">${escapeHTML(text)}${extra}</span></td>`;
+}
+
 function printTechSheet(patientId) {
   const p = state.patients.find(x => x.id === patientId);
   if (!p) return;
   const ts = p.technicalSheet || {};
   const fm = faceMapOf(p);
   const st = studioSettings();
+  const business = (st.businessName || 'Niskin Beauty Studio');
   const win = window.open('', '_blank');
   if (!win) return showToast('Permite las ventanas emergentes para imprimir la ficha.');
-  const sections = TECH_SHEET.map(section => `
-    <h2>${escapeHTML(section.title)}</h2>
-    <table>
-      ${section.fields.map(f => `<tr><th>${escapeHTML(f.label)}</th><td>${escapeHTML(techFieldValueText(f, ts[f.k])) || '—'}</td></tr>`).join('')}
-    </table>
-  `).join('');
-  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Ficha técnica — ${escapeHTML(p.name)}</title>
-    <style>
-      body { font-family: Georgia, serif; color: #37332F; margin: 32px; }
-      h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 22px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-      p { margin: 2px 0; font-size: 13px; } table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-      th { text-align: left; width: 38%; padding: 4px 8px 4px 0; color: #555; font-weight: normal; vertical-align: top; } td { padding: 4px 0; }
-      .faces { display: flex; gap: 24px; } .faces div { flex: 1; text-align: center; font-size: 12px; } .faces svg { width: 100%; max-width: 220px; }
-      .sign { display: flex; gap: 40px; margin-top: 48px; font-size: 12px; } .sign div { flex: 1; border-top: 1px solid #37332F; padding-top: 6px; text-align: center; }
-      @media print { body { margin: 12mm; } }
-    </style></head><body>
-    <h1>Ficha técnica cosmetológica</h1>
-    <p><strong>${escapeHTML(st.businessName || 'Niskin Beauty Studio')}</strong>${st.address ? ` · ${escapeHTML(st.address)}` : ''}</p>
-    <h2>Datos de la paciente</h2>
-    <table>
-      <tr><th>Nombre</th><td>${escapeHTML(p.name)}</td></tr>
-      <tr><th>Edad</th><td>${escapeHTML(formatAge(p.age))}</td></tr>
-      <tr><th>Teléfono / correo</th><td>${escapeHTML(p.phone || '—')} · ${escapeHTML(p.email || '—')}</td></tr>
-      <tr><th>Biotipo / fototipo</th><td>${escapeHTML(p.skinBiotype)} · ${escapeHTML(p.fitzpatrick)}</td></tr>
-      <tr><th>Motivo de consulta</th><td>${escapeHTML(p.mainConcern || '—')}</td></tr>
-      <tr><th>Alergias</th><td>${escapeHTML(p.allergies || '—')}</td></tr>
-    </table>
-    ${sections}
-    <h2>Mapa facial</h2>
-    <div class="faces">
-      <div>${NiskinFaceMap.faceSVG(fm.before.markers)}<p>Antes ${fm.before.date ? `(${escapeHTML(fm.before.date)})` : ''}</p></div>
-      <div>${NiskinFaceMap.faceSVG(fm.after.markers)}<p>Después ${fm.after.date ? `(${escapeHTML(fm.after.date)})` : ''}</p></div>
+
+  const rowsOf = fields => {
+    const cells = fields.map(f => techPrintField(p, ts, f));
+    const rows = [];
+    for (let i = 0; i < cells.length; i += 2) rows.push(`<tr>${cells[i]}${cells[i + 1] || '<td></td>'}</tr>`);
+    return rows.join('');
+  };
+  const sessions = [...(p.sessions || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const sessionRows = sessions.map(s => `
+    <tr>
+      <td>${escapeHTML(formatDateShort(s.date))}</td>
+      <td>${escapeHTML(s.treatmentName)}</td>
+      <td>${escapeHTML([s.activesApplied, ...(s.productsUsed || []).map(u => `${u.name} (${u.qty})`)].filter(Boolean).join('; '))}</td>
+      <td>${escapeHTML([s.improvementScore, s.notes].filter(Boolean).join('. '))}</td>
+    </tr>
+  `).join('') + '<tr class="blank"><td></td><td></td><td></td><td></td></tr>'.repeat(Math.max(1, 3 - sessions.length));
+
+  const pageHTML = (page, pi) => `
+    <div class="page">
+      <h1>${escapeHTML(business.toUpperCase())}</h1>
+      <p class="subtitle">${escapeHTML(page.title)}${page.subtitle ? ` • ${escapeHTML(page.subtitle)}` : ''}</p>
+      ${page.sections.map(section => {
+        if (section.sessionsTable) {
+          return `
+            <h2>${escapeHTML(section.title)}</h2>
+            <table class="grid sessions">
+              <tr><th>Fecha / sesión</th><th>Tratamiento realizado</th><th>Cosméticos / activos</th><th>Observaciones / respuesta</th></tr>
+              ${sessionRows}
+            </table>
+          `;
+        }
+        if (section.columns) {
+          const left = section.fields.filter(f => f.col === 0);
+          const right = section.fields.filter(f => f.col === 1);
+          const rows = Array.from({ length: Math.max(left.length, right.length) }, (_, i) =>
+            `<tr>${left[i] ? techPrintField(p, ts, left[i]) : '<td></td>'}${right[i] ? techPrintField(p, ts, right[i]) : '<td></td>'}</tr>`).join('');
+          return `
+            <h2>${escapeHTML(section.title)}</h2>
+            <table class="grid">
+              <tr><th>${escapeHTML(section.columns[0])}</th><th>${escapeHTML(section.columns[1])}</th></tr>
+              ${rows}
+            </table>
+          `;
+        }
+        if (section.consent) {
+          return `
+            <h2>${escapeHTML(section.title)}</h2>
+            <p class="consent">${escapeHTML(TECH_CONSENT_TEXT)}</p>
+            <table class="grid">
+              <tr><td>Firma del paciente: <span class="line sign"></span></td><td>Fecha: <span class="line">${ts.consentimientoFecha ? escapeHTML(formatDateLong(ts.consentimientoFecha)) : ''}</span></td></tr>
+              <tr><td>Firma de la profesional: <span class="line sign"></span></td><td>${escapeHTML(business)}</td></tr>
+            </table>
+          `;
+        }
+        const isMap = section.title.startsWith('Mapa facial');
+        return `
+          <h2>${escapeHTML(section.title)}</h2>
+          <table class="grid">${rowsOf(section.fields)}</table>
+          ${isMap && (fm.before.markers.length || fm.after.markers.length) ? `
+            <div class="faces">
+              <div>${NiskinFaceMap.faceSVG(fm.before.markers)}<p>Antes${fm.before.date ? ` (${escapeHTML(formatDateShort(fm.before.date))})` : ''}</p></div>
+              <div>${NiskinFaceMap.faceSVG(fm.after.markers)}<p>Después${fm.after.date ? ` (${escapeHTML(formatDateShort(fm.after.date))})` : ''}</p></div>
+            </div>
+          ` : ''}
+        `;
+      }).join('')}
+      <p class="footer">${escapeHTML(business)} • Ficha clínica facial</p>
     </div>
-    <div class="sign"><div>Firma de la paciente</div><div>Firma del especialista</div></div>
+  `;
+
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Ficha clínica — ${escapeHTML(p.name)}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: Arial, Helvetica, sans-serif; color: #222; margin: 0; }
+      .page { padding: 14mm 14mm 10mm; page-break-after: always; }
+      .page:last-child { page-break-after: auto; }
+      h1 { font-family: Georgia, 'Times New Roman', serif; text-align: center; font-size: 22px; letter-spacing: 0.5px; margin: 0; }
+      .subtitle { text-align: center; font-style: italic; font-size: 12px; margin: 4px 0 10px; }
+      h2 { font-size: 12.5px; text-transform: uppercase; margin: 12px 0 4px; }
+      table.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
+      table.grid th, table.grid td { border: 1px solid #555; padding: 4px 6px; vertical-align: top; text-align: left; }
+      table.grid th { background: #eee; font-weight: bold; }
+      table.grid td { width: 50%; }
+      table.sessions td { width: auto; height: 34px; }
+      table.sessions tr.blank td { height: 44px; }
+      .line { display: inline-block; min-width: 120px; border-bottom: 1px solid #777; }
+      .line.sign { min-width: 170px; }
+      .consent { font-size: 10.5px; margin: 0 0 6px; }
+      .faces { display: flex; gap: 24px; justify-content: center; margin-top: 6px; }
+      .faces div { width: 180px; text-align: center; font-size: 11px; }
+      .faces svg { width: 100%; }
+      .footer { text-align: center; font-size: 9.5px; color: #666; margin-top: 14px; }
+      @page { size: letter; margin: 0; }
+    </style></head><body>
+    ${TECH_SHEET_PAGES.map(pageHTML).join('')}
     <script>window.onload = function () { window.print(); };<\/script>
     </body></html>`);
   win.document.close();
